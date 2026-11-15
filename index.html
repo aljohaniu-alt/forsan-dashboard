@@ -548,7 +548,7 @@ const Chart = (function () {
 
     function setData(d) {
       const key = `${d.sym}|${d.tf}`;
-      if (key !== st.key) { st.key = key; st.off = 0; st.cross = null; st.n = d.tf === "1Day" ? 120 : 80; st.cache = null; }
+      if (key !== st.key) { st.key = key; st.off = 0; st.cross = null; st.n = Math.min(d.tf === "1Day" ? 120 : 80, Math.max(20, d.bars.length + 6)); st.cache = null; }
       st.d = d;
       const ck = `${d.bars.length}|${d.bars.length ? d.bars[d.bars.length - 1].t : 0}`;
       if (!st.cache || st.cache.ck !== ck) {
@@ -1260,7 +1260,15 @@ if (typeof module !== "undefined") module.exports = Chart;
     const box = $("#abox"); if (box) box.innerHTML = '<p class="empty">جارٍ تحميل البيانات…</p>';
     skey = ""; dynKey = "";
     try { await loadSymbol(S.open, force); } catch (e) { if (box) box.innerHTML = `<p class="empty">تعذر جلب البيانات: ${esc(e.message)}</p>`; return; }
+    pickTf(S.analysis[S.open]);
     renderAnalysisBox();
+  }
+  /** إن لم يكن في الإطار الحالي بيانات كافية للتحليل نختار أقرب إطار فيه تحليل، وإلا أول إطار فيه شموع للعرض. */
+  function pickTf(A) {
+    if (!A || A.results[S.tf]) return;
+    const order = ["5Min", "15Min", "3Min", "30Min", "1Hour", "1Day", "1Min"];
+    const t = order.find((x) => A.results[x]) || order.find((x) => (A.frames[x] || []).length);
+    if (t) S.tf = t;
   }
   function chartData(sym) {
     const A = S.analysis[sym]; if (!A || !A.frames[S.tf]) return null;
@@ -1293,9 +1301,9 @@ if (typeof module !== "undefined") module.exports = Chart;
     const box = $("#abox"); if (!box || !S.open) return;
     const A = S.analysis[S.open];
     if (!A) { box.innerHTML = '<p class="empty">لا توجد بيانات كافية.</p>'; skey = ""; return; }
-    const r = A.results[S.tf];
-    if (!r) {
-      box.innerHTML = `<p class="empty">بيانات غير كافية لإطار ${S.tf} (يلزم 30 شمعة مكتملة على الأقل). جرّب إطارًا آخر.</p><div class="ctool"><div class="seg" id="atfs">${C.TFS.map((t) => `<button data-tf="${t}" class="${t === S.tf ? "on" : ""}">${TF_LABEL[t]}</button>`).join("")}</div></div>`;
+    const r = A.results[S.tf], frame = A.frames[S.tf] || [];
+    if (!r && !frame.length) {
+      box.innerHTML = `<p class="empty">لا توجد شموع مكتملة في إطار ${S.tf}. السهم قليل التداول على IEX. جرّب إطارًا آخر.</p><div class="ctool"><div class="seg" id="atfs">${C.TFS.map((t) => `<button data-tf="${t}" class="${t === S.tf ? "on" : ""}">${TF_LABEL[t]}</button>`).join("")}</div></div>`;
       $$("#atfs button").forEach((b) => (b.onclick = () => { S.tf = b.dataset.tf; skey = ""; renderAnalysisBox(); }));
       skey = ""; return;
     }
@@ -1316,9 +1324,17 @@ if (typeof module !== "undefined") module.exports = Chart;
       $$("#atfs button").forEach((b) => (b.onclick = () => { S.tf = b.dataset.tf; skey = ""; renderAnalysisBox(); }));
       skey = sk; dynKey = "";
     }
-    const lv = A.levels, dk = `${r.last.t}|${r.score}|${A.bars1m.length}|${lv.HOD}|${lv.LOD}`;
-    if (dk !== dynKey) { dynKey = dk; fillDynamic(A, r); }
+    const lv = A.levels, dk = r ? `${r.last.t}|${r.score}|${A.bars1m.length}|${lv.HOD}|${lv.LOD}` : `limited|${frame.length}|${A.bars1m.length}`;
+    if (dk !== dynKey) { dynKey = dk; if (r) fillDynamic(A, r); else fillLimited(A, frame); }
     chartLive();
+  }
+  /** شموع أقل من 30: نعرض الشارت فقط، بلا درجة ولا قراءة (لا نخترع تحليلًا من بيانات قليلة). */
+  function fillLimited(A, frame) {
+    lastR = null;
+    const p = lastPrice(S.open), c = chgPct(S.open);
+    $("#ahead").innerHTML = `<div><b class="big2">${esc(S.open)}</b> <span id="hp" class="big2 ${cls(c)}">${num(p)}</span> <span id="hc" class="${cls(c)}">${pct(c)}</span></div>`;
+    $("#adyn").innerHTML = `<div class="warnbox"><b>⚠ بيانات قليلة: ${frame.length} شمعة مكتملة فقط في إطار ${esc(S.tf)}</b><p class="note" style="margin:6px 0">السهم قليل التداول على IEX (يظهر هذا في الوارنت والأسهم الضعيفة السيولة)، لذلك لا يمكن حساب الدرجة والقراءة (يلزم 30 شمعة مكتملة على الأقل). الشارت يعرض الشموع المتوفرة فقط. جرّب إطارًا أكبر مثل 15د أو يومي.</p></div>
+      <p class="note">البيانات: <span id="fresh">${esc(freshText())}</span> · المصدر IEX · حجم جزئي</p><p class="note">${esc(C.DISC)}</p>`;
   }
   function fillDynamic(A, r) {
     const meta = { fresh: freshText() };
