@@ -1145,6 +1145,25 @@ if (typeof module !== "undefined") module.exports = Chart;
     const ny = C.nyParts(now());
     return d[d.length - 1].d === ny.d && d.length > 1 ? d[d.length - 2].c : d[d.length - 1].c;
   }
+  /** آخر سعر خارج الدوام (قبل الافتتاح/بعد الإغلاق) مقارنةً بإغلاق الجلسة الرسمية. null أثناء الجلسة. */
+  function offHours(sym) {
+    const A = S.analysis[sym], m = A ? A.bars1m : [], tr = S.trade[sym];
+    const lastBar = m.length ? m[m.length - 1] : null;
+    let t = lastBar ? lastBar.t : null, px = lastBar ? lastBar.c : null;
+    if (tr && (t === null || tr.t >= t)) { t = tr.t; px = tr.p; }
+    if (t === null || px === null) return null;
+    const q = C.nyParts(t);
+    if (q.m >= 570 && q.m < 960) return null;
+    let ref = null;
+    for (let i = m.length - 1; i >= 0; i--) { const b = C.nyParts(m[i].t); if (b.d === q.d && b.m >= 570 && b.m < 960) { ref = m[i].c; break; } if (b.d < q.d) break; }
+    if (ref === null) ref = prevClose(sym);
+    const label = q.m < 570 ? "قبل الافتتاح" : "بعد الإغلاق";
+    return { label, px, ref, chg: ref ? (px / ref - 1) * 100 : null, d: q.d, today: q.d === C.nyParts(now()).d };
+  }
+  function offHoursHtml(sym) {
+    const o = offHours(sym); if (!o) return "";
+    return `${esc(o.label)}${o.today ? "" : " (" + esc(o.d) + ")"}: <b class="num">${num(o.px)}</b> ${o.chg === null ? "" : `<span class="${cls(o.chg)}">${pct(o.chg)}</span>`} <span class="note">عن إغلاق الجلسة ${num(o.ref)}</span>`;
+  }
   const chgPct = (sym) => { const p = lastPrice(sym), pc = prevClose(sym); return p && pc ? (p / pc - 1) * 100 : null; };
 
   // ---------------------------------------------------------------- البث اللحظي
@@ -1579,6 +1598,7 @@ if (typeof module !== "undefined") module.exports = Chart;
     const p = lastPrice(S.open), c = chgPct(S.open), hp = $("#hp"), hc = $("#hc"), fr = $("#fresh");
     if (hp) { hp.textContent = num(p); hp.className = "big2 " + cls(c); }
     if (hc) { hc.innerHTML = pct(c); hc.className = cls(c); }
+    const ho = $("#ho"); if (ho) ho.innerHTML = offHoursHtml(S.open);
     if (fr) fr.textContent = freshText();
   }
   function renderSigs(list, d) {
@@ -1626,7 +1646,7 @@ if (typeof module !== "undefined") module.exports = Chart;
   function fillLimited(A, frame) {
     lastR = null;
     const p = lastPrice(S.open), c = chgPct(S.open);
-    $("#ahead").className = "head"; $("#ahead").innerHTML = `<div><b class="big2">${esc(S.open)}</b> <span id="hp" class="big2 ${cls(c)}">${num(p)}</span> <span id="hc" class="${cls(c)}">${pct(c)}</span></div>`;
+    $("#ahead").className = "head"; $("#ahead").innerHTML = `<div><b class="big2">${esc(S.open)}</b> <span id="hp" class="big2 ${cls(c)}">${num(p)}</span> <span id="hc" class="${cls(c)}">${pct(c)}</span></div><div id="ho" class="note">${offHoursHtml(S.open)}</div>`;
     $("#adyn").innerHTML = `<div class="warnbox"><b>⚠ بيانات قليلة: ${frame.length} شمعة مكتملة فقط في إطار ${esc(S.tf)}</b><p class="note" style="margin:6px 0">السهم قليل التداول على IEX (يظهر هذا في الوارنت والأسهم الضعيفة السيولة)، لذلك لا يمكن حساب الدرجة والقراءة (يلزم 30 شمعة مكتملة على الأقل). الشارت يعرض الشموع المتوفرة فقط. جرّب إطارًا أكبر مثل 15د أو يومي.</p></div>
       <p class="note">البيانات: <span id="fresh">${esc(freshText())}</span> · المصدر IEX · حجم جزئي</p><p class="note">${esc(C.DISC)}</p>`;
   }
@@ -1649,7 +1669,7 @@ if (typeof module !== "undefined") module.exports = Chart;
     if (!marketState().open) warn.push("السوق مغلق الآن، فالأرقام لآخر جلسة");
     if (p !== null && p < 1) warn.push("سهم تحت دولار: السعر يتحرك بسرعة والفرق بين سعر الشراء والبيع قد يأكل جزءًا من الحركة");
     else if (F.atr_pct && F.atr_pct > 2) warn.push(`التذبذب عالٍ: الشمعة الواحدة تتحرك نحو ${F.atr_pct.toFixed(1)}%`);
-    return `<div class="simple"><div class="sh"><b class="big2">${esc(S.open)}</b> <span id="hp" class="big2 ${cls(c)}">${num(p)}</span> <span id="hc" class="${cls(c)}">${pct(c)}</span></div>
+    return `<div class="simple"><div class="sh"><b class="big2">${esc(S.open)}</b> <span id="hp" class="big2 ${cls(c)}">${num(p)}</span> <span id="hc" class="${cls(c)}">${pct(c)}</span></div><div id="ho" class="note">${offHoursHtml(S.open)}</div>
       <div class="lbl">الاتجاه حسب آخر القمم والقيعان</div><div class="trend ${col}"><span class="tword">${arrow} ${esc(st[0])}</span><span class="tdesc">${esc(st[1])}</span></div>
       <ul class="sl">${L.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>
       <div class="mini">حجم التداول: <b>${esc(vol)}</b></div>
@@ -1715,7 +1735,7 @@ if (typeof module !== "undefined") module.exports = Chart;
     setInterval(wsSync, 5000);
     start();
   }
-  window.FT = { get CH() { return CH; }, S, API, init, detectAlerts, staleness, passFilters, mergeBars, pushAlert, formingBar, onTrade };
+  window.FT = { get CH() { return CH; }, offHours, S, API, init, detectAlerts, staleness, passFilters, mergeBars, pushAlert, formingBar, onTrade };
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init); else init();
 })();
 
