@@ -1281,9 +1281,12 @@ if (typeof module !== "undefined") module.exports = Chart;
     }
     if (r1) {
       const m = A.bars1m, n = m.length;
-      if (n > 22) {
-        const avg = m.slice(n - 21, n - 1).reduce((s, b) => s + b.v, 0) / 20;
-        if (avg > 0 && m[n - 1].v >= S.cfgAlerts.volSurge * avg) pushAlert(sym, "volsurge", "1Min", "حجم الدقيقة", `ارتفاع مفاجئ: ${(m[n - 1].v / avg).toFixed(1)}× متوسط آخر 20 دقيقة`, m[n - 1].t, p);
+      if (n > 63) {
+        const sum3 = (i) => m[i].v + m[i - 1].v + m[i - 2].v;
+        const cur3 = sum3(n - 1);
+        let tot = 0; for (let k = 0; k < 20; k++) tot += sum3(n - 4 - k * 3);
+        const avg = tot / 20;
+        if (avg > 0 && cur3 >= S.cfgAlerts.volSurge * avg) pushAlert(sym, "volsurge", "3Min", "حجم 3 دقائق", `ارتفاع مفاجئ: ${(cur3 / avg).toFixed(1)}× المعتاد لكل 3 دقائق (آخر ساعة)`, Math.floor(m[n - 1].t / 180000) * 180000, p);
       }
     }
     S.prev[sym] = cur;
