@@ -1043,9 +1043,10 @@ if (typeof module !== "undefined") module.exports = Chart;
     mode: Store.get("chartMode", "simple"),
     key: Store.get("key", ""), secret: Store.get("secret", ""), ntfy: Store.get("ntfy", ""), finnhub: Store.get("finnhub", ""),
     watch: Store.get("watch", ["SPY", "QQQ", "IWM"]),
-    filters: Store.get("filters", { minPrice: 0.3, maxPrice: 20, minPct: 0, minRvol: 0, minVol: 0, minAvgVol: 0, minDollar: 0, minAtr: 0, maxAtr: 100, minCap: 0 }),
+    filters: { minPrice: 0.3, maxPrice: 20, minPct: 0, minRvol: 0, minVol: 0, minAvgVol: 0, minDollar: 0, minAtr: 0, maxAtr: 100, minCap: 0, maxShares: 30, ...Store.get("filters", {}) },
+    shares: Store.get("shares", {}), shareDelay: 1100,
     cfgAlerts: Store.get("cfgAlerts", { sound: false, rsiLow: 30, rsiHigh: 70, rvolSpike: 3, volSurge: 5 }),
-    bars1m: {}, daily: {}, trade: {}, live: {}, snap: {}, mcap: {}, alerts: [], seen: {}, prev: {}, analysis: {},
+    bars1m: {}, daily: {}, trade: {}, live: {}, snap: {}, alerts: [], seen: {}, prev: {}, analysis: {},
     ws: { state: "off", ticks: 0, lastMsg: 0, lastTrade: 0, lag: null }, rtt: null, skew: 0, tab: "overview", open: null, tf: "5Min",
   };
   const now = () => Date.now() + S.skew;
@@ -1292,7 +1293,7 @@ if (typeof module !== "undefined") module.exports = Chart;
 
   // ---------------------------------------------------------------- ماسح الأسهم
   const FIELDS = [["minPrice", "أدنى سعر"], ["maxPrice", "أعلى سعر"], ["minPct", "أدنى تغير % (مطلق)"], ["minRvol", "أدنى RVOL"], ["minVol", "أدنى حجم حالي"],
-    ["minAvgVol", "أدنى متوسط حجم"], ["minDollar", "أدنى سيولة بالدولار"], ["minAtr", "أدنى ATR%"], ["maxAtr", "أعلى ATR%"], ["minCap", "أدنى قيمة سوقية $ (يحتاج Finnhub)"]];
+    ["minAvgVol", "أدنى متوسط حجم"], ["minDollar", "أدنى سيولة بالدولار"], ["minAtr", "أدنى ATR%"], ["maxAtr", "أعلى ATR%"], ["minCap", "أدنى قيمة سوقية $ (يحتاج Finnhub)"], ["maxShares", "أقصى عدد أسهم الشركة بالمليون (0 = بلا حد، يحتاج Finnhub)"]];
   async function scanUniverse() {
     const [mv, ac] = await Promise.all([API.movers(50), API.actives(50)]);
     const set = new Set([...(mv.gainers || []).map((x) => x.symbol), ...(mv.losers || []).map((x) => x.symbol), ...(ac.most_actives || []).map((x) => x.symbol), ...S.watch]);
@@ -1332,21 +1333,46 @@ if (typeof module !== "undefined") module.exports = Chart;
     const res = Math.max(...bars.slice(n - 21, n - 1).map((b) => b.h)), p = bars[n - 1].c;
     return { res, dist: (res / p - 1) * 100 };
   }
-  function passFilters(r) {
+  // ---- عدد أسهم الشركة (إجمالي الأسهم القائمة) من Finnhub، يُخزَّن 30 يومًا ويُجلب مرة واحدة لكل سهم
+  const SHARES_TTL = 30 * 864e5, SCAN_TABS = ["movers", "volume", "momentum", "breakout", "bounce"];
+  const sharesOf = (sym) => { const e = S.shares[sym]; return e && now() - e[1] < SHARES_TTL ? e[0] : undefined; };
+  const shareLimitOn = () => S.filters.maxShares > 0 && !!S.finnhub;
+  const sharesOk = (sym) => { if (!shareLimitOn()) return true; const m = sharesOf(sym); return m !== undefined && m > 0 && m <= S.filters.maxShares; };
+  const sharesText = (sym) => { const m = sharesOf(sym); return m === undefined ? (S.finnhub ? "…" : "—") : m > 0 ? `<bdi dir="ltr">${m < 10 ? m.toFixed(1) : Math.round(m)}M</bdi>` : "—"; };
+  const shareQ = { running: false, pending: 0 };
+  async function fillShares(syms) {
+    if (!S.finnhub || shareQ.running) return;
+    const need = [...new Set(syms)].filter((s) => SYM_RE.test(s) && sharesOf(s) === undefined).slice(0, 80);
+    if (!need.length) return;
+    shareQ.running = true; shareQ.pending = need.length; let n = 0;
+    try {
+      for (const s of need) {
+        let j;
+        try { const res = await fetch(`https://finnhub.io/api/v1/stock/profile2?symbol=${encodeURIComponent(s)}&token=${encodeURIComponent(S.finnhub)}`); if (res.status === 429 || res.status === 401 || res.status === 403) break; j = await res.json(); } catch (e) { break; }
+        S.shares[s] = [j && j.shareOutstanding > 0 ? j.shareOutstanding : 0, now()];
+        shareQ.pending--; n++;
+        const shr = $("#shr"); if (shr) shr.innerHTML = shareLine();
+        if (n % 8 === 0) { Store.set("shares", S.shares); if (SCAN_TABS.includes(S.tab)) renderBody(); }
+        if (S.shareDelay) await new Promise((r) => setTimeout(r, S.shareDelay));
+      }
+    } finally { Store.set("shares", S.shares); shareQ.running = false; shareQ.pending = 0; if (SCAN_TABS.includes(S.tab)) renderBody(); }
+  }
+  function shareLine() {
+    if (!S.finnhub) return "";
+    const m = sharesOf(S.open);
+    if (m === undefined) return "عدد أسهم الشركة: جارٍ الجلب…";
+    if (!m) return "عدد أسهم الشركة: غير متوفر";
+    return `عدد أسهم الشركة: <b><bdi dir="ltr">${m.toFixed(1)}M</bdi></b>${S.filters.maxShares > 0 && m > S.filters.maxShares ? ` (فوق حد ${S.filters.maxShares}M)` : ""}`;
+  }
+  function passFilters(r, skipShares) {
     const f = S.filters;
     if (r.price < f.minPrice || r.price > f.maxPrice) return false;
     if (Math.abs(r.chg || 0) < f.minPct) return false;
     if ((r.rvol || 0) < f.minRvol || r.vol < f.minVol || (r.avgVol || 0) < f.minAvgVol || r.dollar < f.minDollar) return false;
     if (r.atrPct !== null && (r.atrPct < f.minAtr || r.atrPct > f.maxAtr)) return false;
-    if (f.minCap > 0) { const c = S.mcap[r.sym]; if (!c || c < f.minCap) return false; }
+    if (f.minCap > 0) { const m = sharesOf(r.sym); if (!m || m * 1e6 * r.price < f.minCap) return false; }
+    if (!skipShares && !sharesOk(r.sym)) return false;
     return true;
-  }
-  async function fillMcap(rows) {
-    if (!S.finnhub) return;
-    for (const r of rows.slice(0, 25)) {
-      if (S.mcap[r.sym] !== undefined) continue;
-      try { const j = await (await fetch(`https://finnhub.io/api/v1/stock/profile2?symbol=${r.sym}&token=${encodeURIComponent(S.finnhub)}`)).json(); S.mcap[r.sym] = j.marketCapitalization ? j.marketCapitalization * 1e6 : 0; } catch (e) { S.mcap[r.sym] = 0; }
-    }
   }
   const riskChips = (r) => {
     const c = [];
@@ -1358,7 +1384,7 @@ if (typeof module !== "undefined") module.exports = Chart;
   };
 
   // ---------------------------------------------------------------- عرض
-  const TABS = [["overview", "نظرة السوق"], ["movers", "الأكثر حركة"], ["volume", "حجم غير عادي"], ["momentum", "الزخم"], ["breakout", "الاختراقات"], ["watch", "قائمتي"], ["analysis", "تحليل سهم"], ["alerts", "التنبيهات"]];
+  const TABS = [["overview", "نظرة السوق"], ["movers", "الأكثر حركة"], ["volume", "حجم غير عادي"], ["momentum", "الزخم"], ["breakout", "الاختراقات"], ["bounce", "الارتداد"], ["watch", "قائمتي"], ["analysis", "تحليل سهم"], ["alerts", "التنبيهات"]];
   let scan = null, scanning = false;
   function scoreBadge(sc, cat) {
     if (sc === null || sc === undefined) return "—";
@@ -1396,7 +1422,7 @@ if (typeof module !== "undefined") module.exports = Chart;
   function renderAlertsBadge() { const el = $("#abadge"); if (el) el.textContent = S.alerts.length ? S.alerts.length : ""; }
   function filtersUI() {
     return `<details class="filters"><summary>الفلاتر (قابلة للتعديل)</summary><div class="fgrid">${FIELDS.map(([k, t]) => `<label>${t}<input type="number" step="any" data-f="${k}" value="${S.filters[k]}"></label>`).join("")}</div>
-      <p class="note">لا تُستبعد الأسهم الصغيرة تلقائيًا: يظهر تحذير السيولة والتذبذب بجانب كل سهم.</p></details>`;
+      <p class="note">حد الأسهم يستبعد أي سهم عدده أكبر من الحد أو غير معروف. ضع 0 لإلغائه. ويُحسب من إجمالي أسهم الشركة وليس الأسهم المتاحة للتداول.</p></details>`;
   }
   function bindFilters() {
     $$("[data-f]").forEach((i) => (i.onchange = () => { S.filters[i.dataset.f] = parseFloat(i.value) || 0; Store.set("filters", S.filters); render(); }));
@@ -1409,7 +1435,7 @@ if (typeof module !== "undefined") module.exports = Chart;
     return `<div class="tw"><table><thead><tr>${cols.map((c) => `<th>${c[0]}</th>`).join("")}</tr></thead><tbody>${rows.map((r) => `<tr>${cols.map((c) => `<td>${c[1](r)}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
   }
   const COLS = {
-    base: [["السهم", (r) => symLink(r.sym)], ["السعر", (r) => num(r.price)], ["التغير", (r) => `<span class="${cls(r.chg)}">${pct(r.chg)}</span>`]],
+    base: [["السهم", (r) => symLink(r.sym)], ["السعر", (r) => num(r.price)], ["التغير", (r) => `<span class="${cls(r.chg)}">${pct(r.chg)}</span>`], ["الأسهم", (r) => sharesText(r.sym)]],
     vol: [["الحجم", (r) => big(r.vol)], ["RVOL", (r) => (r.rvol ? r.rvol.toFixed(1) + "×" : "—")]],
     sc: [["الدرجة", (r) => scoreBadge(r.score, r.cat)], ["يومي", (r) => scoreBadge(r.dscore)]],
     risk: [["تنبيهات المخاطر", riskChips]],
@@ -1418,7 +1444,7 @@ if (typeof module !== "undefined") module.exports = Chart;
   async function runScan(force) {
     if (scanning || (!force && scan && now() - scan.at < 30000)) return;
     scanning = true; $("#scanmsg") && ($("#scanmsg").textContent = "جارٍ المسح…");
-    try { const r = await scanUniverse(); scan = { ...r, at: now() }; fillMcap(r.rows); }
+    try { const r = await scanUniverse(); scan = { ...r, at: now() }; }
     catch (e) { $("#scanmsg") && ($("#scanmsg").textContent = "تعذر المسح: " + e.message); }
     scanning = false; render();
   }
@@ -1435,10 +1461,14 @@ if (typeof module !== "undefined") module.exports = Chart;
     $("#rescan").onclick = () => runScan(true);
     bindFilters();
     if (!scan) { runScan(); $("#scanmsg").textContent = "جارٍ المسح…"; return; }
-    $("#scanmsg").textContent = `آخر مسح قبل ${fmtAge((now() - scan.at) / 1000)} · ${scan.rows.length} سهم قبل الفلاتر`;
-    const rows = scan.rows.filter(passFilters), out = $("#scanout");
+    const cand = scan.rows.filter((r) => passFilters(r, true)), mvSyms = [...(scan.movers.gainers || []), ...(scan.movers.losers || [])].map((x) => x.symbol);
+    fillShares([...cand].sort((x, y) => Math.abs(y.chg || 0) - Math.abs(x.chg || 0)).map((r) => r.sym).concat(mvSyms));
+    const unk = cand.filter((r) => sharesOf(r.sym) === 0).length;
+    $("#scanmsg").textContent = `آخر مسح قبل ${fmtAge((now() - scan.at) / 1000)} · ${scan.rows.length} سهم قبل الفلاتر` + (shareLimitOn() ? ` · حد الأسهم ≤${S.filters.maxShares}M${shareQ.pending ? ` (جارٍ فحص ${shareQ.pending})` : ""}${unk ? ` · ${unk} بلا بيانات أسهم (مخفية)` : ""}` : "");
+    const rows = scan.rows.filter((r) => passFilters(r)), out = $("#scanout");
+    if (S.filters.maxShares > 0 && !S.finnhub) $("#scanmsg").insertAdjacentHTML("afterend", '<div class="warnbox" id="shbanner"><b>⚠ حد الأسهم غير مفعل</b><br>يحتاج مفتاح Finnhub المجاني: سجّل في finnhub.io، انسخ API Key، ثم ضعه في ⚙ الإعدادات في خانة Finnhub Key.</div>');
     if (t === "movers") {
-      const m = scan.movers, mk = (arr) => arr.map((x) => ({ sym: x.symbol, price: x.price, chg: x.percent_change, vol: 0, dollar: 1e9 })).filter((r) => r.price >= S.filters.minPrice && r.price <= S.filters.maxPrice && Math.abs(r.chg) >= S.filters.minPct);
+      const m = scan.movers, mk = (arr) => arr.map((x) => ({ sym: x.symbol, price: x.price, chg: x.percent_change, vol: 0, dollar: 1e9 })).filter((r) => r.price >= S.filters.minPrice && r.price <= S.filters.maxPrice && Math.abs(r.chg) >= S.filters.minPct && sharesOk(r.sym));
       out.innerHTML = "<h3>الأكثر ارتفاعًا</h3>" + table([...COLS.base, ["تحذير", (r) => (r.price < 1 ? '<span class="chip warn">تحت 1$</span>' : "")]], mk(m.gainers || [])) + "<h3>الأكثر انخفاضًا</h3>" + table([...COLS.base, ["تحذير", (r) => (r.price < 1 ? '<span class="chip warn">تحت 1$</span>' : "")]], mk(m.losers || []));
     } else if (t === "volume") {
       out.innerHTML = table([...COLS.base, ...COLS.vol, ["متوسط الحجم", (r) => big(r.avgVol)], ["سيولة $", (r) => big(r.dollar)], ...COLS.risk], rows.filter((r) => r.rvol).sort((a, b) => b.rvol - a.rvol).slice(0, 50), "لا أسهم بحجم غير معتاد ضمن الفلاتر.");
@@ -1447,6 +1477,10 @@ if (typeof module !== "undefined") module.exports = Chart;
       const cols = [...COLS.base, ...COLS.sc, ["RSI", (r) => (r.rsi ? r.rsi.toFixed(0) : "—")], ...COLS.vol, ["قبل السوق", (r) => (r.pmVol ? `${big(r.pmVol)} · ${pct(r.pmGap)}` : "—")], ...COLS.risk];
       out.innerHTML = "<h3>زخم شرائي</h3>" + table(cols, pos.filter((r) => r.score >= 60).slice(0, 25), "لا أسهم بزخم شرائي ضمن الفلاتر.") + "<h3>زخم بيعي</h3>" + table(cols, pos.filter((r) => r.score <= 40).reverse().slice(0, 25), "لا أسهم بزخم بيعي ضمن الفلاتر.")
         + '<p class="note">الدرجة على إطار 5 دقائق فقط. افتح السهم لمقارنة الأطر قبل أي قراءة.</p>';
+    } else if (t === "bounce") {
+      const bn = rows.filter((r) => r.events.some((e) => e[0] === "pullback") || (r.rsi !== null && r.rsi !== undefined && r.rsi < 30)).sort((x, y) => (x.rsi ?? 99) - (y.rsi ?? 99));
+      out.innerHTML = table([...COLS.base, ["RSI", (r) => (r.rsi ? r.rsi.toFixed(0) : "—")], ["حدث", (r) => (r.events.filter((e) => e[0] === "pullback").map((e) => esc(e[2])).join("<br>") || (r.rsi < 30 ? "RSI تحت 30: تشبع بيع" : "—"))], ...COLS.vol, ...COLS.risk], bn.slice(0, 40), "لا أسهم بحالة ارتداد ضمن الفلاتر.")
+        + '<p class="note">الارتداد هنا وصف: سهم تراجع إلى EMA20 داخل اتجاه صاعد، أو RSI تحت 30. ليس إشارة شراء، وقد يستمر الهبوط.</p>';
     } else if (t === "breakout") {
       const br = rows.filter((r) => r.near && (r.near.dist <= 1.5 || r.events.some((e) => e[0] === "breakout"))).sort((a, b) => (a.near.dist) - (b.near.dist));
       out.innerHTML = table([...COLS.base, ["المقاومة", (r) => num(r.near.res)], ["المسافة", (r) => pct(r.near.dist)], ["حدث", (r) => r.events.filter((e) => ["breakout", "false_up", "breakdown"].includes(e[0])).map((e) => esc(e[2])).join("<br>") || "قريب من الاختراق"], ...COLS.vol, ...COLS.risk], br, "لا أسهم قريبة من اختراق ضمن الفلاتر.")
@@ -1638,6 +1672,7 @@ if (typeof module !== "undefined") module.exports = Chart;
       <div class="lbl">الاتجاه حسب آخر القمم والقيعان</div><div class="trend ${col}"><span class="tword">${arrow} ${esc(st[0])}</span><span class="tdesc">${esc(st[1])}</span></div>
       <ul class="sl">${L.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>
       <div class="mini">حجم التداول: <b>${esc(vol)}</b></div>
+      <div class="mini" id="shr">${shareLine()}</div>
       <div class="mini">الدرجة الفنية: <b><bdi dir="ltr">${Math.round(R.score)}/100</bdi></b> على إطار ${esc(TF_LABEL[S.tf] || S.tf)}</div>
       ${warn.map((w) => `<div class="wn">⚠ ${esc(w)}</div>`).join("")}
       <div class="note">وصف لما يحدث في الشارت وليس توصية. القرار قرارك.</div></div>`;
@@ -1647,7 +1682,7 @@ if (typeof module !== "undefined") module.exports = Chart;
     const R = C.report(S.open, A.results, S.tf, A.frames[S.tf], A.levels, meta); lastR = R;
     const F = R.facts, p = lastPrice(S.open), c = chgPct(S.open);
     const li = (a) => (a.length ? a.map((x) => `<li>${esc(x)}</li>`).join("") : "<li>—</li>");
-    $("#ahead").className = "plain"; $("#ahead").innerHTML = simpleCard(A, R, p, c);
+    $("#ahead").className = "plain"; $("#ahead").innerHTML = simpleCard(A, R, p, c); fillShares([S.open]);
     $("#adyn").innerHTML = `<h3>الحقائق (من البيانات)</h3>
       <div class="grid">${[["RVOL", F.rvol ? F.rvol.toFixed(1) + "×" : "—"], ["RSI", F.rsi ? F.rsi.toFixed(0) : "—"], ["MACD", num(F.macd, 3)], ["إشارة", num(F.signal, 3)], ["هيستوغرام", num(F.hist, 3)], ["EMA9", num(F.ema9)], ["EMA20", num(F.ema20)], ["EMA50", num(F.ema50)], ["SMA200", num(F.sma200)], ["VWAP", num(F.vwap)], ["ATR", `${num(F.atr)} (${F.atr_pct ? F.atr_pct.toFixed(1) : "—"}%)`], ["شموع محللة", r.bars]].map(([k, v]) => `<div><span>${k}</span><b>${v}</b></div>`).join("")}</div>
       <div class="levels">${Object.entries(R.levels).filter(([k]) => R.levelNames[k]).map(([k, v]) => `<span class="chip">${R.levelNames[k]} ${num(v)}</span>`).join("")}</div>
@@ -1687,7 +1722,7 @@ if (typeof module !== "undefined") module.exports = Chart;
       <p class="warnt">استخدم مفاتيح بيانات أو حساب تجريبي (Paper) فقط. المفاتيح تُحفظ في هذا الجهاز ولا تُرسل لأي جهة إلا Alpaca.</p>
       <label>Alpaca Key ID<input id="sk" value="${esc(S.key)}" autocomplete="off"></label><label>Alpaca Secret<input id="ss" type="password" value="${esc(S.secret)}" autocomplete="off"></label>
       <label>موضوع ntfy (اختياري: يرسل تنبيهات الصفحة لجوالك)<input id="sn" value="${esc(S.ntfy)}"></label>
-      <label>Finnhub Key (اختياري: للقيمة السوقية)<input id="sf" value="${esc(S.finnhub)}"></label>
+      <label>Finnhub Key (لفلتر عدد الأسهم والقيمة السوقية)<input id="sf" value="${esc(S.finnhub)}"></label>
       <div class="bar"><button id="ssave">حفظ</button><button id="sclose">إغلاق</button></div></div>`;
     d.hidden = false;
     $("#sclose").onclick = () => (d.hidden = true);
