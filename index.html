@@ -67,6 +67,12 @@ body.nofs{overflow:hidden}
 #side .sec{margin:10px 0 3px;color:var(--acc);font-size:12px;font-weight:700;display:flex;flex-direction:column}#side .sec small{color:var(--mut);font-weight:400}
 #side .r{display:flex;justify-content:space-between;gap:4px;font-size:12.5px;padding:2px 0;border-bottom:1px solid #1c2b40}#side .r span{color:var(--mut)}#side .r b{direction:ltr}
 #cfs.fs~.tiphint{display:none}
+.simple{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;margin-bottom:10px}.simple .sh{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}
+.trend{display:flex;flex-direction:column;gap:2px;margin:10px 0 6px;padding:10px 12px;border-radius:12px;border:1px solid var(--line);border-right:5px solid var(--mut)}.trend.up{border-right-color:var(--up)}.trend.dn{border-right-color:var(--dn)}.trend.mid{border-right-color:#f6c344}
+.trend .tword{font-size:22px;font-weight:800}.trend.up .tword{color:var(--up)}.trend.dn .tword{color:var(--dn)}.trend.mid .tword{color:#f6c344}.trend .tdesc{color:var(--mut);font-size:13.5px}.simple .lbl{margin-top:10px;font-size:12.5px;color:var(--mut)}.simple .trend{margin-top:4px}.plain{margin-bottom:10px}
+.simple .sl{margin:6px 0;padding-right:18px;font-size:15px;line-height:1.9}.simple .mini{font-size:13.5px;margin:3px 0;color:var(--mut)}.simple .mini b{color:var(--tx)}.simple .wn{background:#33261a;border:1px solid #6b4a1f;border-radius:10px;padding:6px 10px;margin:6px 0;font-size:13px}
+.more{margin:12px 0}.more>summary{cursor:pointer;padding:10px 14px;background:var(--panel);border:1px solid var(--line);border-radius:var(--r);font-weight:700;color:var(--acc);list-style:none}.more[open]>summary{margin-bottom:8px}
+#cfs:not(.adv) .tgrow{display:none}
 @media(max-width:560px){.mtf{grid-template-columns:repeat(4,1fr)}canvas{height:480px}}
 </style>
 </head>
@@ -557,6 +563,25 @@ const Chart = (function () {
   const niceStep = (r) => { const e = Math.pow(10, Math.floor(Math.log10(r))), f = r / e; return (f < 1.5 ? 1 : f < 3.5 ? 2 : f < 7.5 ? 5 : 10) * e; };
 
 
+
+  // ---------------------------------------------------------------- خطوط الاتجاه (من قمم وقيعان مؤكدة فقط، بلا نظر للمستقبل)
+  const STATE = { up: ["صاعد", "القمم والقيعان ترتفع تدريجيًا"], down: ["هابط", "القمم والقيعان تنخفض تدريجيًا"], side: ["عرضي", "القمم والقيعان شبه ثابتة: السعر يتحرك بين سقف وأرضية بلا اتجاه"], squeeze: ["انضغاط", "السقف ينزل والأرضية ترتفع: النطاق يضيق، وغالبًا يتبعه خروج بأحد الاتجاهين"], wide: ["اتساع", "القمم ترتفع والقيعان تنخفض: التذبذب يزيد"], unclear: ["غير واضح", "لا توجد قمم وقيعان مؤكدة كافية لرسم اتجاه"] };
+  function trend(bars, I) {
+    const n = bars.length; if (n < 25) return null;
+    const a = lastOf(I.a) || bars[n - 1].c * 0.01, base = Math.max(0, n - 120), P = C.confirmedPivots(bars.slice(base), 3);
+    const mk = (arr) => {
+      if (arr.length < 2) return null;
+      const [j1, p1] = arr[arr.length - 2], [j2, p2] = arr[arr.length - 1]; if (j2 - j1 < 4) return null;
+      const sl = (p2 - p1) / (j2 - j1), i2 = j2 + base;
+      return { i1: j1 + base, p1, i2, p2, slope: sl, at: (i) => p2 + sl * (i - i2) };
+    };
+    const H = mk(P.hi), L = mk(P.lo), sH = H ? (H.slope * 20) / a : null, sL = L ? (L.slope * 20) / a : null, th = 0.5;
+    let state = "unclear";
+    if (H && L) state = Math.abs(sH) < th && Math.abs(sL) < th ? "side" : sH > th && sL > th ? "up" : sH < -th && sL < -th ? "down" : sH < -th && sL > th ? "squeeze" : sH > th && sL < -th ? "wide" : Math.abs(sH) < th || Math.abs(sL) < th ? "side" : "unclear";
+    const w = bars.slice(-40);
+    return { H, L, sH, sL, state, a, rangeHi: Math.max(...w.map((b) => b.h)), rangeLo: Math.min(...w.map((b) => b.l)) };
+  }
+
   // ---------------------------------------------------------------- شرح العلامات (دوال نقية، وصف فقط وليس توصية)
   const NOTE = "وصف لحدث فني وقع فعلًا على شموع مكتملة. ليس توصية شراء أو بيع، والقرار قرارك.";
   const LVX = {
@@ -647,6 +672,14 @@ const Chart = (function () {
       const x = LVX[h.key] || [h.name, "", ""];
       return { title: `${h.name}: ${x[0]}`, tag: "مستوى", dir: 0, rows, meaning: x[1], how: x[2], watch: "راقب سلوك السعر عند المستوى: اختراق بحجم، أو ارتداد، أو اختراق فاشل.", caution: "المستويات تعطي مناطق انتباه وليست حدودًا مضمونة.", note: NOTE };
     }
+    if (h.k === "tl" || h.k === "state") {
+      const T = env.T; if (!T) return null;
+      if (h.k === "state") { const x = STATE[T.state]; return { title: "الاتجاه: " + x[0], tag: x[0], dir: T.state === "up" ? 1 : T.state === "down" ? -1 : 0, rows: [["الحد الأعلى (40 شمعة)", px(T.rangeHi)], ["الحد الأدنى (40 شمعة)", px(T.rangeLo)]], meaning: x[1] + ".", how: "يُحكم من ميل خطي القمم والقيعان المؤكدة (مقاسًا بحركة الشمعة المعتادة ATR).", watch: "الخط الأعلى (أحمر) يوصل آخر قمتين، والأدنى (أخضر) يوصل آخر قاعين. كسر أي خط بإغلاق شمعة يغيّر الصورة.", caution: "الاتجاه وصف لما حدث، ولا يضمن الاستمرار.", note: NOTE }; }
+      const Lh = h.key === "TLH" ? T.H : T.L, top = h.key === "TLH", v = Lh.at(total - 1), sl = (Lh.slope * 20) / T.a, kind = Math.abs(sl) < 0.5 ? "شبه أفقي" : sl > 0 ? "صاعد" : "هابط";
+      return { title: top ? "خط السقف (يصل بين آخر قمتين)" : "خط الأرضية (يصل بين آخر قاعين)", tag: kind, dir: 0, rows: [["قيمته الآن", px(v)], ["السعر الآن", `${px(cur)} (${cur >= v ? "فوقه" : "تحته"} ${fmtp(chg(v))})`], ["القمتان", `${px(Lh.p1)} ثم ${px(Lh.p2)}`], ["الميل", kind]],
+        meaning: top ? "كلما اقترب السعر من هذا الخط من تحت، تراجع عنه سابقًا. هو سقف مائل بدل أن يكون أفقيًا." : "كلما نزل السعر إلى هذا الخط، ارتد عنه سابقًا. هو أرضية مائلة بدل أن تكون أفقية.",
+        how: "يمر بآخر قمتين (أو قاعين) مؤكدتين، ثم يُمدّ إلى اليمين.", watch: top ? "إغلاق شمعة فوقه يعني كسر السقف، والفشل عنده يعني أنه ما زال سقفًا." : "إغلاق شمعة تحته يعني كسر الأرضية، والثبات فوقه يعني أنها ما زالت أرضية.", caution: "الخط يتحرك مع ظهور قمم وقيعان جديدة، فليس ثابتًا.", note: NOTE };
+    }
     if (h.k === "ind") {
       const x = IND[h.key], v = h.v, rel = isn(v) ? "—" : cur >= v ? "السعر فوقه" : "السعر تحته";
       return { title: x[0], tag: "مؤشر", dir: 0, rows: [["قيمته", px(v)], ["العلاقة بالسعر", `${rel} (${fmtp(chg(v))})`]], meaning: x[1], how: "يُحسب من أسعار الإغلاق للشموع المكتملة.", watch: "انتبه لميل الخط وللمسافة بين السعر والخط.", caution: "مؤشرات المتوسطات تتأخر عن السعر.", note: NOTE };
@@ -662,7 +695,7 @@ const Chart = (function () {
 
   // ---------------------------------------------------------------- الرسم التفاعلي
   function create(canvas, opts = {}) {
-    const st = { n: 80, off: 0, cross: null, show: { vwap: true, ema: true, lv: true, sig: true, zones: true, rsi: true, macd: true, ...(opts.show || {}) }, d: null, cache: null, key: "", raf: 0, geom: null, hits: [], sel: null };
+    const st = { n: 80, off: 0, cross: null, show: { vwap: true, ema: true, lv: true, sig: true, zones: true, rsi: true, macd: true, trend: true, ...(opts.show || {}) }, d: null, cache: null, key: "", raf: 0, geom: null, hits: [], sel: null };
     const ptrs = new Map();
     let drag = null, pinch = null;
 
@@ -673,7 +706,7 @@ const Chart = (function () {
       const ck = `${d.bars.length}|${d.bars.length ? d.bars[d.bars.length - 1].t : 0}`;
       if (!st.cache || st.cache.ck !== ck) {
         const I = indicators(d.bars, d.intraday), S = scan(d.bars, I, d.intraday);
-        st.cache = { ck, I, S, Z: d.bars.length ? zones(d.bars, I, d.bars[d.bars.length - 1].c) : null };
+        st.cache = { ck, I, S, T: d.bars.length ? trend(d.bars, I) : null, Z: d.bars.length ? zones(d.bars, I, d.bars[d.bars.length - 1].c) : null };
         if (opts.onSignals) opts.onSignals(S.numbered, d);
       }
       schedule();
@@ -783,6 +816,26 @@ const Chart = (function () {
         if (L.b[0] < s || L.a[0] >= e) return;
         ctx.strokeStyle = L.dir > 0 ? COL.up : COL.dn; ctx.setLineDash([4, 3]); ctx.lineWidth = 1.4; ctx.beginPath(); ctx.moveTo(x(L.a[0]), y(L.a[1])); ctx.lineTo(x(L.b[0]), y(L.b[1])); ctx.stroke(); ctx.setLineDash([]); ctx.lineWidth = 1;
       });
+      // ----- خطوط الاتجاه
+      const T = st.cache.T;
+      if (show.trend && T) {
+        const tl = (L, col, key) => {
+          if (!L) return;
+          const i0 = Math.max(L.i1, s), i1 = total - 1 + 2;
+          ctx.strokeStyle = col; ctx.lineWidth = 2; ctx.setLineDash([9, 4]); ctx.beginPath(); ctx.moveTo(x(i0), y(L.at(i0))); ctx.lineTo(x(i1), y(L.at(i1))); ctx.stroke(); ctx.setLineDash([]); ctx.lineWidth = 1;
+          ctx.fillStyle = col; [[L.i1, L.p1], [L.i2, L.p2]].forEach(([ii, pp]) => { if (ii >= s && ii < e) { ctx.beginPath(); ctx.arc(x(ii), y(pp), 3.5, 0, Math.PI * 2); ctx.fill(); } });
+          st.hits.push({ k: "tl", id: "t" + key, key, L });
+        };
+        tl(T.H, COL.dn, "TLH"); tl(T.L, COL.up, "TLL");
+        if (T.state === "side") {
+          [[T.rangeHi, "حد أعلى"], [T.rangeLo, "حد أدنى"]].forEach(([v, nm]) => { if (v > lo && v < hi) { ctx.strokeStyle = COL.mid + "aa"; ctx.setLineDash([2, 5]); ctx.beginPath(); ctx.moveTo(0, y(v)); ctx.lineTo(plotW, y(v)); ctx.stroke(); ctx.setLineDash([]); tags.push({ y: y(v), text: px(v), col: COL.mid }); } });
+        }
+        const sx = STATE[T.state], scol = T.state === "up" ? COL.up : T.state === "down" ? COL.dn : COL.mid, txt = "الاتجاه: " + sx[0];
+        ctx.font = "bold 12px system-ui, sans-serif"; const tw = ctx.measureText(txt).width + 16;
+        ctx.fillStyle = scol + "33"; ctx.fillRect(6, yTop + 4, tw, 20); ctx.strokeStyle = scol; ctx.strokeRect(6.5, yTop + 4.5, tw - 1, 19);
+        ctx.fillStyle = scol; ctx.textAlign = "left"; ctx.fillText(txt, 14, yTop + 14); ctx.font = "10px system-ui, sans-serif";
+        st.hits.push({ k: "state", id: "state", x0: 6, y0: yTop + 4, x1: 6 + tw, y1: yTop + 24 });
+      }
       // ----- علامات الإشارات
       if (show.sig) S.list.forEach((g) => {
         if (g.i < s || g.i >= e) return;
@@ -869,6 +922,8 @@ const Chart = (function () {
           ctx.strokeStyle = "#ffffff"; ctx.lineWidth = 2;
           if (sh.k === "sig") { ctx.beginPath(); ctx.arc(sh.x, sh.y, 15, 0, Math.PI * 2); ctx.stroke(); }
           else if (sh.k === "lv") { ctx.beginPath(); ctx.moveTo(0, sh.y); ctx.lineTo(plotW, sh.y); ctx.stroke(); }
+          else if (sh.k === "tl") { const ia = Math.max(sh.L.i1, st.geom.s), ib = total - 1 + 2; ctx.beginPath(); ctx.moveTo(x(ia), y(sh.L.at(ia))); ctx.lineTo(x(ib), y(sh.L.at(ib))); ctx.stroke(); }
+          else if (sh.k === "state") { ctx.strokeRect(sh.x0 - 1, sh.y0 - 1, sh.x1 - sh.x0 + 2, sh.y1 - sh.y0 + 2); }
           else if (sh.k === "pane") { ctx.strokeRect(1, sh.y0 + 1, plotW - 2, sh.y1 - sh.y0 - 2); }
           else if (sh.k === "ind") { ctx.beginPath(); ctx.arc(sh.x, sh.y, 6, 0, Math.PI * 2); ctx.stroke(); }
           ctx.lineWidth = 1;
@@ -890,16 +945,19 @@ const Chart = (function () {
 
     function envNow() {
       const d = st.d, { I, S, Z } = st.cache, all = d.forming ? d.bars.concat([d.forming]) : d.bars;
-      return { all, I, Z, d, sigs: S.list, cur: d.price !== null && d.price !== undefined ? d.price : all[all.length - 1].c };
+      return { all, I, Z, T: st.cache.T, d, sigs: S.list, cur: d.price !== null && d.price !== undefined ? d.price : all[all.length - 1].c };
     }
     function hitTest(px_, py) {
       const g = st.geom; if (!g || !st.cache) return null;
       let best = null, bd = 1e9;
+      for (const h of st.hits) if (h.k === "state" && px_ >= h.x0 && px_ <= h.x1 && py >= h.y0 && py <= h.y1) return h;
       st.hits.forEach((h) => { if (h.k !== "sig") return; const dd = Math.hypot(h.x - px_, h.y - py); if (dd <= h.r && dd < bd) { bd = dd; best = h; } });
       if (best) return best;
       st.hits.forEach((h) => { if (h.k !== "lv") return; const dd = Math.abs(h.y - py); if (dd <= 8 && dd < bd) { bd = dd; best = h; } });
       if (best) return best;
       if (px_ < g.plotW && py >= g.yTop && py <= g.yTop + g.priceH) {
+        const i0 = idxAt(px_); st.hits.forEach((h) => { if (h.k !== "tl") return; const dd = Math.abs(g.y(h.L.at(i0)) - py); if (dd <= 9 && dd < bd) { bd = dd; best = h; } });
+        if (best) return best;
         const i = idxAt(px_), { I } = st.cache, d = st.d, all = d.forming ? d.bars.concat([d.forming]) : d.bars;
         const arrs = [["EMA9", I.e9], ["EMA20", I.e20], ["EMA50", I.e50], ["VWAP", d.intraday ? I.vw : []], ["SMA200", d.intraday ? [] : I.s200]];
         const xx = (i - g.s + 0.5) * g.cw;
@@ -918,7 +976,7 @@ const Chart = (function () {
       const { I, Z } = st.cache, all = d.forming ? d.bars.concat([d.forming]) : d.bars;
       if (!all.length) return null;
       const i = st.cross && st.cross.i < all.length ? st.cross.i : all.length - 1, b = all[i], at = (a) => (i < a.length && !isn(a[i]) ? a[i] : null);
-      return { i, b, cursor: !!st.cross, forming: !!d.forming && i === all.length - 1, t: timeLabel(b, d.intraday), e9: at(I.e9), e20: at(I.e20), e50: at(I.e50), s200: d.intraday ? null : at(I.s200), vw: d.intraday ? at(I.vw) : null, rsi: at(I.r), hist: at(I.m.hist), res: Z && Z.res ? Z.res.p : null, sup: Z && Z.sup ? Z.sup.p : null };
+      return { T: st.cache.T, last: all.length - 1, i, b, cursor: !!st.cross, forming: !!d.forming && i === all.length - 1, t: timeLabel(b, d.intraday), e9: at(I.e9), e20: at(I.e20), e50: at(I.e50), s200: d.intraday ? null : at(I.s200), vw: d.intraday ? at(I.vw) : null, rsi: at(I.r), hist: at(I.m.hist), res: Z && Z.res ? Z.res.p : null, sup: Z && Z.sup ? Z.sup.p : null };
     }
     canvas.addEventListener("pointerdown", (ev) => {
       ptrs.set(ev.pointerId, rectX(ev));
@@ -950,13 +1008,13 @@ const Chart = (function () {
 
     if (typeof ResizeObserver !== "undefined") { try { new ResizeObserver(() => schedule()).observe(canvas); } catch (e) { /* */ } }
     return {
-      setData, draw: schedule, state: st, snapshot, hitTest, pick, clearPick() { st.sel = null; schedule(); },
+      setData, draw: schedule, state: st, snapshot, setShow(v) { Object.assign(st.show, v); st.sel = null; schedule(); }, hitTest, pick, clearPick() { st.sel = null; schedule(); },
       zoom(f) { st.n = Math.round(st.n * f); schedule(); },
       reset() { st.off = 0; st.n = st.d && st.d.tf === "1Day" ? 120 : 80; st.cross = null; schedule(); },
       toggle(k) { st.show[k] = !st.show[k]; if (opts.onShow) opts.onShow(st.show); schedule(); },
     };
   }
-  return { create, scan, zones, indicators, timeLabel, px, explain };
+  return { create, scan, zones, indicators, timeLabel, px, explain, trend, STATE };
 })();
 if (typeof module !== "undefined") module.exports = Chart;
 
@@ -982,6 +1040,7 @@ if (typeof module !== "undefined") module.exports = Chart;
     set(k, v) { try { localStorage.setItem("ft_" + k, JSON.stringify(v)); } catch (e) { /* ممنوع/ممتلئ */ } },
   };
   const S = {
+    mode: Store.get("chartMode", "simple"),
     key: Store.get("key", ""), secret: Store.get("secret", ""), ntfy: Store.get("ntfy", ""), finnhub: Store.get("finnhub", ""),
     watch: Store.get("watch", ["SPY", "QQQ", "IWM"]),
     filters: Store.get("filters", { minPrice: 0.3, maxPrice: 20, minPct: 0, minRvol: 0, minVol: 0, minAvgVol: 0, minDollar: 0, minAtr: 0, maxAtr: 100, minCap: 0 }),
@@ -1419,6 +1478,8 @@ if (typeof module !== "undefined") module.exports = Chart;
     bindOpen();
   }
   // ---------------------------------------------------------------- صفحة تحليل سهم + الشارت
+  const SIMPLE_SHOW = { vwap: false, ema: false, lv: false, sig: false, rsi: false, macd: false, zones: true, trend: true };
+  const modeShow = () => (S.mode === "adv" ? { vwap: true, ema: true, lv: true, sig: true, zones: true, rsi: true, macd: true, trend: true, ...Store.get("chartShow", {}) } : SIMPLE_SHOW);
   let CH = null, skey = "", dynKey = "", lastR = null;
   const TF_LABEL = { "1Min": "1د", "3Min": "3د", "5Min": "5د", "15Min": "15د", "30Min": "30د", "1Hour": "1س", "1Day": "يومي" };
   const TGL = [["vwap", "VWAP"], ["ema", "EMA"], ["lv", "مستويات اليوم"], ["zones", "دعم/مقاومة"], ["sig", "الإشارات"], ["rsi", "RSI"], ["macd", "MACD"]];
@@ -1476,10 +1537,11 @@ if (typeof module !== "undefined") module.exports = Chart;
       <div class="p ${cls(c)}">${num(p)}</div><div class="${cls(c)} chgl">${pct(c)}</div>
       <div class="sec">${sn.cursor ? "الشمعة المحددة" : sn.forming ? "الشمعة الحية" : "آخر شمعة"}<small>${esc(sn.t)}</small></div>
       ${row("فتح", b.o)}${row("أعلى", b.h)}${row("أدنى", b.l)}${row("إغلاق", b.c, up ? "up" : "dn")}${row("حجم", vol)}
-      <div class="sec">المؤشرات</div>
-      ${sn.vw !== null ? row("VWAP", sn.vw) : ""}${row("EMA9", sn.e9)}${row("EMA20", sn.e20)}${row("EMA50", sn.e50)}${sn.s200 !== null ? row("SMA200", sn.s200) : ""}${row("RSI", sn.rsi === null ? null : sn.rsi.toFixed(0))}${row("MACD hist", sn.hist === null ? null : sn.hist.toFixed(4))}
+      ${S.mode === "adv" ? "" : `<div class="sec">الاتجاه</div>${row("الحالة", sn.T ? Chart.STATE[sn.T.state][0] : "—")}${sn.T && sn.T.H ? row("السقف", sn.T.H.at(sn.last)) : ""}${sn.T && sn.T.L ? row("الأرضية", sn.T.L.at(sn.last)) : ""}`}
+      ${S.mode !== "adv" ? "" : `<div class="sec">المؤشرات</div>`}
+      ${S.mode !== "adv" ? "" : `${sn.vw !== null ? row("VWAP", sn.vw) : ""}${row("EMA9", sn.e9)}${row("EMA20", sn.e20)}${row("EMA50", sn.e50)}${sn.s200 !== null ? row("SMA200", sn.s200) : ""}${row("RSI", sn.rsi === null ? null : sn.rsi.toFixed(0))}${row("MACD hist", sn.hist === null ? null : sn.hist.toFixed(4))}`}
       <div class="sec">مستويات</div>
-      ${lv.HOD !== undefined ? row("HOD", lv.HOD) + row("LOD", lv.LOD) : ""}${lv.PDH !== undefined ? row("PDH", lv.PDH) + row("PDL", lv.PDL) : ""}${sn.res !== null ? row("مقاومة", sn.res) : ""}${sn.sup !== null ? row("دعم", sn.sup) : ""}${lastR && lastR.invalidation ? row("INV", lastR.invalidation.px) : ""}
+      ${S.mode !== "adv" ? "" : `${lv.HOD !== undefined ? row("HOD", lv.HOD) + row("LOD", lv.LOD) : ""}${lv.PDH !== undefined ? row("PDH", lv.PDH) + row("PDL", lv.PDL) : ""}`}${sn.res !== null ? row("مقاومة", sn.res) : ""}${sn.sup !== null ? row("دعم", sn.sup) : ""}${lastR && lastR.invalidation ? row("INV", lastR.invalidation.px) : ""}
       <div class="sec">البث</div>${row("التأخر", lag === null || lag === undefined ? null : (lag < 10 ? lag.toFixed(1) : Math.round(lag)) + "ث")}`;
     if (el._k !== html) { el._k = html; el.innerHTML = html; }
   }
@@ -1524,13 +1586,15 @@ if (typeof module !== "undefined") module.exports = Chart;
       box.innerHTML = `<div class="head" id="ahead"></div>
         <div id="cfs"><div class="ctool"><div class="seg" id="atfs">${C.TFS.map((t) => `<button data-tf="${t}" class="${t === S.tf ? "on" : ""}">${TF_LABEL[t]}</button>`).join("")}</div>
           <div class="seg" id="azoom"><button data-z="0.8" aria-label="تقريب">＋</button><button data-z="1.25" aria-label="إبعاد">－</button><button data-z="r" aria-label="إعادة">⟲</button></div>
-          <button id="fsbtn" class="fsb">⛶ تكبير</button></div>
+          <div class="seg" id="amode"><button data-m="simple">بسيط</button><button data-m="adv">متقدم</button></div><button id="fsbtn" class="fsb">⛶ تكبير</button></div>
         <div class="ctool tgrow"><div class="tg" id="atg">${TGL.map(([k, t]) => `<button data-k="${k}">${t}</button>`).join("")}</div></div>
         <div class="fsrow"><div class="chartwrap"><canvas id="chart"></canvas><div id="pick" hidden></div></div><aside id="side"></aside></div></div>
-        <p class="note tiphint">اضغط على أي ▲▼ أو خط أو مؤشر داخل الشارت ليظهر شرحه.</p>
-        <div class="legend"><span>R مقاومة</span><span>S دعم</span><span>INV مستوى إبطال القراءة</span><span>HOD/LOD أعلى/أدنى اليوم</span><span>PDH/PDL أعلى/أدنى أمس</span><span>PMH/PML ما قبل السوق</span><span>ORH/ORL النطاق الافتتاحي</span><span>▲▼ حدث فني مرقّم</span><span>الشمعة المتقطعة = حية، ولا تدخل في التحليل حتى تكتمل</span></div>
-        <div class="sigs" id="asig"></div><div id="adyn"></div>`;
-      CH = Chart.create($("#chart"), { show: Store.get("chartShow", {}), onShow: (v) => Store.set("chartShow", v), onSignals: renderSigs, onPick: showPick, onFrame: renderSide });
+        <p class="note tiphint">اضغط على أي خط أو علامة داخل الشارت ليظهر شرحها.</p>
+        <details class="more" id="more"><summary>تفاصيل أكثر (للمتقدمين)</summary><div class="legend"><span>R مقاومة</span><span>S دعم</span><span>INV مستوى إبطال القراءة</span><span>HOD/LOD أعلى/أدنى اليوم</span><span>PDH/PDL أعلى/أدنى أمس</span><span>PMH/PML ما قبل السوق</span><span>ORH/ORL النطاق الافتتاحي</span><span>▲▼ حدث فني مرقّم</span><span>الشمعة المتقطعة = حية، ولا تدخل في التحليل حتى تكتمل</span></div>
+        <div class="sigs" id="asig"></div><div id="adyn"></div></details>`;
+      CH = Chart.create($("#chart"), { show: modeShow(), onShow: (v) => { if (S.mode === "adv") Store.set("chartShow", v); }, onSignals: renderSigs, onPick: showPick, onFrame: renderSide });
+      const syncMode = () => { $("#cfs").classList.toggle("adv", S.mode === "adv"); $$("#amode button").forEach((b) => b.classList.toggle("on", b.dataset.m === S.mode)); };
+      syncMode(); $$("#amode button").forEach((b) => (b.onclick = () => { S.mode = b.dataset.m; Store.set("chartMode", S.mode); CH.setShow(modeShow()); syncMode(); sync(); renderSide(); }));
       $("#fsbtn").onclick = () => setFs(!S.fs); setFs(!!S.fs);
       const sync = () => $$("#atg button").forEach((b) => b.classList.toggle("on", !!CH.state.show[b.dataset.k]));
       sync();
@@ -1547,18 +1611,43 @@ if (typeof module !== "undefined") module.exports = Chart;
   function fillLimited(A, frame) {
     lastR = null;
     const p = lastPrice(S.open), c = chgPct(S.open);
-    $("#ahead").innerHTML = `<div><b class="big2">${esc(S.open)}</b> <span id="hp" class="big2 ${cls(c)}">${num(p)}</span> <span id="hc" class="${cls(c)}">${pct(c)}</span></div>`;
+    $("#ahead").className = "head"; $("#ahead").innerHTML = `<div><b class="big2">${esc(S.open)}</b> <span id="hp" class="big2 ${cls(c)}">${num(p)}</span> <span id="hc" class="${cls(c)}">${pct(c)}</span></div>`;
     $("#adyn").innerHTML = `<div class="warnbox"><b>⚠ بيانات قليلة: ${frame.length} شمعة مكتملة فقط في إطار ${esc(S.tf)}</b><p class="note" style="margin:6px 0">السهم قليل التداول على IEX (يظهر هذا في الوارنت والأسهم الضعيفة السيولة)، لذلك لا يمكن حساب الدرجة والقراءة (يلزم 30 شمعة مكتملة على الأقل). الشارت يعرض الشموع المتوفرة فقط. جرّب إطارًا أكبر مثل 15د أو يومي.</p></div>
       <p class="note">البيانات: <span id="fresh">${esc(freshText())}</span> · المصدر IEX · حجم جزئي</p><p class="note">${esc(C.DISC)}</p>`;
+  }
+
+  /** بطاقة "الصورة باختصار": اتجاه وحدود وحجم بلغة بسيطة. وصف فقط وليست توصية. */
+  function simpleCard(A, R, p, c) {
+    const bars = A.frames[S.tf], n = bars.length, I = Chart.indicators(bars, S.tf !== "1Day"), T = Chart.trend(bars, I), F = R.facts;
+    const st = T ? Chart.STATE[T.state] : ["غير واضح", "بيانات قليلة لرسم اتجاه"], k = T ? T.state : "unclear", col = k === "up" ? "up" : k === "down" ? "dn" : "mid", arrow = k === "up" ? "↗" : k === "down" ? "↘" : k === "side" ? "↔" : "•";
+    const L = [];
+    if (T) {
+      const lo = T.L ? T.L.at(n - 1) : null, hi = T.H ? T.H.at(n - 1) : null;
+      if (k === "side") { L.push(`فوق ${num(T.rangeHi)} يخرج السعر من النطاق للأعلى`); L.push(`تحت ${num(T.rangeLo)} يخرج من النطاق للأسفل`); }
+      else if (k === "up" && lo !== null) { L.push(`الصعود يبقى سليمًا ما دام السعر فوق ${num(lo)}`); if (hi !== null) L.push(`السقف المائل الآن عند ${num(hi)}`); }
+      else if (k === "down" && hi !== null) { L.push(`الهبوط يبقى سليمًا ما دام السعر تحت ${num(hi)}`); if (lo !== null) L.push(`الأرضية المائلة الآن عند ${num(lo)}`); }
+      else if (lo !== null && hi !== null) { L.push(`النطاق الآن بين ${num(Math.min(lo, hi))} و${num(Math.max(lo, hi))}`); L.push("الخروج من أحد الطرفين بإغلاق شمعة يوضح الاتجاه"); }
+      else L.push(`آخر 40 شمعة بين ${num(T.rangeLo)} و${num(T.rangeHi)}`);
+    }
+    const rv = F.rvol, vol = !rv ? "—" : rv >= 2 ? `أعلى بوضوح من المعتاد (${rv.toFixed(1)}×)` : rv >= 1.2 ? `أعلى قليلًا من المعتاد (${rv.toFixed(1)}×)` : rv < 0.7 ? `أقل من المعتاد (${rv.toFixed(1)}×)` : "عادي";
+    const warn = [];
+    if (!marketState().open) warn.push("السوق مغلق الآن، فالأرقام لآخر جلسة");
+    if (p !== null && p < 1) warn.push("سهم تحت دولار: السعر يتحرك بسرعة والفرق بين سعر الشراء والبيع قد يأكل جزءًا من الحركة");
+    else if (F.atr_pct && F.atr_pct > 2) warn.push(`التذبذب عالٍ: الشمعة الواحدة تتحرك نحو ${F.atr_pct.toFixed(1)}%`);
+    return `<div class="simple"><div class="sh"><b class="big2">${esc(S.open)}</b> <span id="hp" class="big2 ${cls(c)}">${num(p)}</span> <span id="hc" class="${cls(c)}">${pct(c)}</span></div>
+      <div class="lbl">الاتجاه حسب آخر القمم والقيعان</div><div class="trend ${col}"><span class="tword">${arrow} ${esc(st[0])}</span><span class="tdesc">${esc(st[1])}</span></div>
+      <ul class="sl">${L.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>
+      <div class="mini">حجم التداول: <b>${esc(vol)}</b></div>
+      <div class="mini">الدرجة الفنية: <b><bdi dir="ltr">${Math.round(R.score)}/100</bdi></b> على إطار ${esc(TF_LABEL[S.tf] || S.tf)}</div>
+      ${warn.map((w) => `<div class="wn">⚠ ${esc(w)}</div>`).join("")}
+      <div class="note">وصف لما يحدث في الشارت وليس توصية. القرار قرارك.</div></div>`;
   }
   function fillDynamic(A, r) {
     const meta = { fresh: freshText() };
     const R = C.report(S.open, A.results, S.tf, A.frames[S.tf], A.levels, meta); lastR = R;
     const F = R.facts, p = lastPrice(S.open), c = chgPct(S.open);
     const li = (a) => (a.length ? a.map((x) => `<li>${esc(x)}</li>`).join("") : "<li>—</li>");
-    $("#ahead").innerHTML = `<div><b class="big2">${esc(S.open)}</b> <span id="hp" class="big2 ${cls(c)}">${num(p)}</span> <span id="hc" class="${cls(c)}">${pct(c)}</span></div>
-      <div class="gauge"><div class="gfill ${R.score >= 60 ? "up" : R.score <= 40 ? "dn" : "mid"}" style="width:${R.score}%"></div></div>
-      <div><b>${Math.round(R.score)}/100</b> — ${esc(R.category)} <span class="note">(على إطار ${esc(S.tf)} فقط)</span></div>`;
+    $("#ahead").className = "plain"; $("#ahead").innerHTML = simpleCard(A, R, p, c);
     $("#adyn").innerHTML = `<h3>الحقائق (من البيانات)</h3>
       <div class="grid">${[["RVOL", F.rvol ? F.rvol.toFixed(1) + "×" : "—"], ["RSI", F.rsi ? F.rsi.toFixed(0) : "—"], ["MACD", num(F.macd, 3)], ["إشارة", num(F.signal, 3)], ["هيستوغرام", num(F.hist, 3)], ["EMA9", num(F.ema9)], ["EMA20", num(F.ema20)], ["EMA50", num(F.ema50)], ["SMA200", num(F.sma200)], ["VWAP", num(F.vwap)], ["ATR", `${num(F.atr)} (${F.atr_pct ? F.atr_pct.toFixed(1) : "—"}%)`], ["شموع محللة", r.bars]].map(([k, v]) => `<div><span>${k}</span><b>${v}</b></div>`).join("")}</div>
       <div class="levels">${Object.entries(R.levels).filter(([k]) => R.levelNames[k]).map(([k, v]) => `<span class="chip">${R.levelNames[k]} ${num(v)}</span>`).join("")}</div>
