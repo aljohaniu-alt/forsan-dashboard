@@ -4,42 +4,58 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>لوحة تحليل الأسهم</title>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0b1220">
+<link rel="preconnect" href="https://data.alpaca.markets" crossorigin>
+<link rel="preconnect" href="https://stream.data.alpaca.markets" crossorigin>
+<title>لوحة السوق</title>
 <style>
-:root{--bg:#0e1621;--panel:#16212e;--line:#243447;--tx:#e8eef5;--mut:#8aa0b5;--up:#2ecc71;--dn:#e74c3c;--mid:#f1c40f;--acc:#3498db}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.6 system-ui,-apple-system,"Segoe UI",Tahoma,sans-serif;padding:env(safe-area-inset-top) 0 40px}
-header{position:sticky;top:0;z-index:5;background:var(--panel);border-bottom:1px solid var(--line);padding:8px 12px}
-.top{display:flex;justify-content:space-between;align-items:center}.top h1{font-size:16px;margin:0}
-#gear{background:none;border:0;color:var(--tx);font-size:20px;cursor:pointer}
-#status{font-size:12px;color:var(--mut);margin-top:2px}.dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:#777}.dot.ok{background:var(--up)}.dot.wait{background:var(--mid)}.dot.bad{background:var(--dn)}
-#tabs{display:flex;gap:6px;overflow-x:auto;padding:8px 12px;background:var(--bg);position:sticky;top:58px;z-index:4;border-bottom:1px solid var(--line)}
-#tabs button{flex:0 0 auto;background:var(--panel);color:var(--tx);border:1px solid var(--line);border-radius:18px;padding:6px 14px;font-size:14px;cursor:pointer}
-#tabs button.on{background:var(--acc);border-color:var(--acc);color:#fff}#tabs i{font-style:normal;background:var(--dn);color:#fff;border-radius:9px;padding:0 6px;margin-right:6px;font-size:11px}
+:root{--bg:#0b1220;--panel:#111b2b;--panel2:#0e1726;--line:#1c2b40;--tx:#e6edf5;--mut:#8397ad;--up:#26a69a;--dn:#ef5350;--mid:#f6c344;--acc:#3b82f6;--r:14px}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.65 -apple-system,"SF Pro Text","SF Arabic","Segoe UI",Tahoma,system-ui,sans-serif;padding:env(safe-area-inset-top) 0 48px;-webkit-font-smoothing:antialiased}
+header{position:sticky;top:0;z-index:6;background:rgba(11,18,32,.92);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border-bottom:1px solid var(--line);padding:10px 14px 8px}
+.top{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.brand{display:flex;align-items:center;gap:10px}.logo{width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,#2563eb,#26a69a);display:grid;place-items:center;font-size:18px}
+.brand h1{font-size:16px;margin:0;line-height:1.2}.brand small{color:var(--mut);font-size:11.5px}
+#gear{background:var(--panel);border:1px solid var(--line);color:var(--tx);font-size:17px;width:36px;height:36px;border-radius:50%;padding:0;cursor:pointer}
+#status{display:flex;gap:6px;overflow-x:auto;margin-top:8px;padding-bottom:2px;scrollbar-width:none}#status::-webkit-scrollbar{display:none}
+.pill{flex:0 0 auto;display:inline-flex;align-items:center;gap:6px;background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:2px 10px;font-size:12px;color:var(--mut);white-space:nowrap}.pill b{color:var(--tx);font-weight:600}.pill.warn{border-color:#6b4a1f;color:#ffcf8a}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#677}.dot.ok{background:var(--up);box-shadow:0 0 0 3px #26a69a33}.dot.wait{background:var(--mid)}.dot.bad{background:var(--dn)}
+#tabs{display:flex;gap:4px;overflow-x:auto;padding:8px 12px;background:var(--bg);position:sticky;top:var(--hh,92px);z-index:5;border-bottom:1px solid var(--line);scrollbar-width:none}#tabs::-webkit-scrollbar{display:none}
+#tabs button{flex:0 0 auto;background:transparent;color:var(--mut);border:0;border-radius:10px;padding:7px 13px;font-size:14px;cursor:pointer;font-weight:600}
+#tabs button.on{background:var(--panel);color:var(--tx);box-shadow:inset 0 -2px 0 var(--acc)}#tabs i{font-style:normal;background:var(--dn);color:#fff;border-radius:9px;padding:0 6px;margin-right:6px;font-size:11px}
 main{padding:12px;max-width:1100px;margin:auto}.up{color:var(--up)}.dn{color:var(--dn)}.mid{color:var(--mid)}
-.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px;cursor:pointer}.card.wide{grid-column:1/-1;margin-top:10px;cursor:default}
-.big{font-size:24px;font-weight:700}.big2{font-size:22px;font-weight:700}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;cursor:pointer}.card.wide{grid-column:1/-1;margin-top:10px;cursor:default}
+.big{font-size:24px;font-weight:700;letter-spacing:.2px}.big2{font-size:22px;font-weight:700}
 .bar{display:flex;gap:8px;margin:8px 0;flex-wrap:wrap;align-items:center}
-input,select,button{background:var(--panel);color:var(--tx);border:1px solid var(--line);border-radius:8px;padding:8px 12px;font:inherit}button{cursor:pointer}button:hover{border-color:var(--acc)}
-.tw{overflow-x:auto}table{width:100%;border-collapse:collapse;font-size:13.5px}th,td{padding:7px 8px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}th{color:var(--mut);font-weight:600}
-.sym{color:var(--acc);font-weight:700;cursor:pointer;text-decoration:none}.badge{display:inline-block;min-width:34px;text-align:center;border-radius:6px;padding:1px 6px;font-weight:700;color:#0b121a}.badge.up{background:var(--up)}.badge.dn{background:var(--dn)}.badge.mid{background:var(--mid)}
-.chip{display:inline-block;background:#1d2d3f;border-radius:10px;padding:1px 9px;margin:2px;font-size:12px}.chip.warn{background:#4a2a20;color:#ffb199}
-.note{color:var(--mut);font-size:12.5px}.empty{color:var(--mut);padding:18px;text-align:center}.warnt{color:#ffb199}
-.filters{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:8px 12px;margin:8px 0}.fgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-top:8px}.fgrid label{display:flex;flex-direction:column;font-size:12px;color:var(--mut)}
-.head{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:10px}.gauge{height:10px;background:#243447;border-radius:6px;margin:8px 0;overflow:hidden}.gfill{height:100%}.gfill.up{background:var(--up)}.gfill.dn{background:var(--dn)}.gfill.mid{background:var(--mid)}
-canvas{width:100%;height:300px;background:#0a111a;border:1px solid var(--line);border-radius:10px}
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px}.grid div{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:6px 10px;display:flex;justify-content:space-between}.grid span{color:var(--mut)}
+input,select,button{background:var(--panel);color:var(--tx);border:1px solid var(--line);border-radius:10px;padding:8px 12px;font:inherit}button{cursor:pointer}button:hover{border-color:var(--acc)}
+.tw{overflow-x:auto;border:1px solid var(--line);border-radius:var(--r);background:var(--panel2)}table{width:100%;border-collapse:collapse;font-size:13.5px}th,td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}tr:last-child td{border-bottom:0}th{color:var(--mut);font-weight:600;background:var(--panel)}
+.sym{color:#7fb2ff;font-weight:700;cursor:pointer;text-decoration:none}.badge{display:inline-block;min-width:34px;text-align:center;border-radius:7px;padding:1px 7px;font-weight:700;color:#0b121a}.badge.up{background:var(--up)}.badge.dn{background:var(--dn)}.badge.mid{background:var(--mid)}
+.chip{display:inline-block;background:#18283c;border-radius:10px;padding:1px 9px;margin:2px;font-size:12px}.chip.warn{background:#4a2a20;color:#ffb199}
+.note{color:var(--mut);font-size:12.5px}.empty{color:var(--mut);padding:22px;text-align:center}.warnt{color:#ffb199}
+.filters{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:8px 14px;margin:8px 0}.fgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-top:8px}.fgrid label{display:flex;flex-direction:column;font-size:12px;color:var(--mut)}
+.head{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;margin-bottom:10px}.gauge{height:8px;background:#1c2b40;border-radius:6px;margin:8px 0;overflow:hidden}.gfill{height:100%;transition:width .3s}.gfill.up{background:var(--up)}.gfill.dn{background:var(--dn)}.gfill.mid{background:var(--mid)}
+.ctool{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:6px 0}
+.seg{display:inline-flex;background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden}.seg button{border:0;border-radius:0;background:transparent;color:var(--mut);padding:6px 10px;font-size:13px;font-weight:600}.seg button.on{background:var(--acc);color:#fff}
+.tg{display:inline-flex;gap:6px;flex-wrap:wrap}.tg button{padding:4px 10px;font-size:12.5px;border-radius:999px;color:var(--mut)}.tg button.on{color:var(--tx);border-color:var(--acc);background:#16294a}
+.chartwrap{position:relative;border:1px solid var(--line);border-radius:var(--r);overflow:hidden;background:#0b1220;direction:ltr}
+canvas{display:block;width:100%;height:520px;touch-action:pan-y;user-select:none;-webkit-user-select:none}
+.legend{display:flex;gap:10px 14px;flex-wrap:wrap;color:var(--mut);font-size:12px;margin:8px 2px}.legend span{white-space:nowrap}
+.sigs{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:8px 14px;margin:8px 0}.sigs ol{list-style:none;margin:6px 0;padding:0}.sigs li{display:flex;gap:10px;align-items:flex-start;padding:5px 0;border-bottom:1px solid var(--line);font-size:13.5px}.sigs li:last-child{border-bottom:0}
+.num{flex:0 0 22px;height:22px;border-radius:50%;border:1.5px solid currentColor;display:grid;place-items:center;font-size:12px;font-weight:700}.num.up{color:var(--up)}.num.dn{color:var(--dn)}.num.mid{color:var(--mid)}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px}.grid div{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:6px 10px;display:flex;justify-content:space-between}.grid span{color:var(--mut)}
 .cols2{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px}ul{margin:4px 0;padding-right:18px}
-.warnbox{background:#3a2a1a;border:1px solid #6b4a1f;border-radius:10px;padding:8px 12px;margin:10px 0}.read{background:var(--panel);border-right:3px solid var(--acc);padding:10px 12px;border-radius:6px}
-.mtf{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}.mtf div{border-radius:8px;padding:6px;text-align:center;border:1px solid var(--line);display:flex;flex-direction:column;font-size:12.5px}.mtf .up{background:#16382a}.mtf .dn{background:#3b1d1d}.mtf .mid{background:#3a3417}.mtf .na{opacity:.5}
-.cmp{white-space:pre-wrap;font:inherit;color:var(--mut)}.inval{background:#2a1d1d;border:1px solid #5b2b2b;border-radius:8px;padding:8px 12px}
-.alert{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:8px 12px;margin:8px 0}.alert.stale{opacity:.7;border-color:#6b4a1f}
-#settings{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:20;display:flex;align-items:center;justify-content:center}#settings[hidden]{display:none}.sheet{background:var(--panel);border-radius:14px;padding:16px;width:min(94vw,440px);max-height:90vh;overflow:auto}.sheet label{display:block;margin:8px 0;font-size:13px;color:var(--mut)}.sheet input{width:100%}
-.rm{color:var(--dn);cursor:pointer}.inl{display:inline-flex;gap:6px;align-items:center}h3{margin:16px 0 6px}h4{margin:6px 0}
-@media(max-width:560px){.mtf{grid-template-columns:repeat(4,1fr)}canvas{height:240px}}
+.warnbox{background:#33261a;border:1px solid #6b4a1f;border-radius:12px;padding:8px 14px;margin:10px 0}.read{background:var(--panel);border-right:3px solid var(--acc);padding:10px 14px;border-radius:8px}
+.mtf{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}.mtf div{border-radius:10px;padding:6px;text-align:center;border:1px solid var(--line);display:flex;flex-direction:column;font-size:12.5px}.mtf .up{background:#12342d}.mtf .dn{background:#391d1f}.mtf .mid{background:#38321a}.mtf .na{opacity:.5}
+.cmp{white-space:pre-wrap;font:inherit;color:var(--mut)}.inval{background:#2a1d1f;border:1px solid #5b2b2b;border-radius:10px;padding:8px 14px}
+.alert{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:8px 14px;margin:8px 0}.alert.stale{opacity:.7;border-color:#6b4a1f}
+#settings{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:20;display:flex;align-items:center;justify-content:center}#settings[hidden]{display:none}.sheet{background:var(--panel);border-radius:16px;padding:16px;width:min(94vw,440px);max-height:90vh;overflow:auto}.sheet label{display:block;margin:8px 0;font-size:13px;color:var(--mut)}.sheet input{width:100%}
+.rm{color:var(--dn);cursor:pointer}.inl{display:inline-flex;gap:6px;align-items:center}h3{margin:18px 0 6px;font-size:16px}h4{margin:6px 0}
+@media(max-width:560px){.mtf{grid-template-columns:repeat(4,1fr)}canvas{height:480px}}
 </style>
 </head>
 <body>
-<header><div class="top"><h1>📊 لوحة تحليل الأسهم الأمريكية — قراءة فقط، القرار قرارك</h1><button id="gear" aria-label="الإعدادات">⚙</button></div><div id="status"></div></header>
+<header><div class="top"><div class="brand"><div class="logo">📈</div><div><h1>لوحة السوق</h1><small>قراءة فنية فقط · القرار قرارك</small></div></div><button id="gear" aria-label="الإعدادات">⚙</button></div><div id="status"></div></header>
 <nav id="tabs"></nav>
 <main id="body"></main>
 <div id="settings" hidden></div>
@@ -444,6 +460,334 @@ if (typeof module !== "undefined") module.exports = Core;
 
 </script>
 <script>
+/* شارت احترافي (Canvas) يرسم التحليل فوق الشموع: VWAP وEMA ومستويات اليوم ومناطق الدعم والمقاومة وعلامات الإشارات وانفراج RSI
+   مع لوحتي RSI وMACD. الشمعة الحية تُرسم من الصفقات مباشرة ولا تدخل في التحليل حتى تكتمل.
+   لا يعطي توصية: العلامات وصف لحدث فني حدث فعلًا على شموع مكتملة. */
+const Chart = (function () {
+  "use strict";
+  const C = typeof Core !== "undefined" ? Core : require("./core.js");
+  const isn = (x) => x === null || x === undefined || Number.isNaN(x);
+  const COL = { bg: "#0b1220", grid: "#152133", axis: "#8397ad", text: "#d5deea", up: "#26a69a", dn: "#ef5350", mid: "#f6c344", ema9: "#f6c344", ema20: "#42a5f5", ema50: "#ab47bc", sma200: "#ff9800", vwap: "#f1f5f9" };
+  const LV = { HOD: ["HOD", "#26a69a"], LOD: ["LOD", "#ef5350"], PDH: ["PDH", "#90a4ae"], PDL: ["PDL", "#90a4ae"], PM_high: ["PMH", "#b39ddb"], PM_low: ["PML", "#b39ddb"], OR_high: ["ORH", "#4dd0e1"], OR_low: ["ORL", "#4dd0e1"] };
+  const px = (x) => (isn(x) ? "—" : Math.abs(x) < 1 ? x.toFixed(4) : x.toFixed(2));
+  const hhmm = (m) => String(Math.floor(m / 60)).padStart(2, "0") + ":" + String(m % 60).padStart(2, "0");
+  const sg = (x) => (x > 0 ? 1 : x < 0 ? -1 : 0);
+  const mean = (a) => (a.length ? a.reduce((s, x) => s + x, 0) / a.length : 0);
+  const lastOf = (a) => { for (let i = a.length - 1; i >= 0; i--) if (!isn(a[i])) return a[i]; return null; };
+  const timeLabel = (b, intraday) => (intraday ? `${b.d.slice(5)} ${hhmm(b.m)}` : b.d);
+
+  // ---------------------------------------------------------------- المؤشرات والإشارات (دوال نقية)
+  function indicators(bars, intraday) {
+    const c = bars.map((b) => b.c);
+    return { e9: C.ema(c, 9), e20: C.ema(c, 20), e50: C.ema(c, 50), s200: C.sma(c, 200), vw: C.sessionVwap(bars, intraday), r: C.rsi(c), m: C.macd(c), a: C.atr(bars) };
+  }
+  /** يمسح الشموع المكتملة ويسجل كل حدث فني وقع. كل إشارة تُحسب بمعلومات متاحة عند إغلاق شمعتها فقط. */
+  function scan(bars, I, intraday) {
+    const out = [], lines = [], n = bars.length;
+    const add = (i, k, dir, text, extra) => out.push({ i, k, dir, text, t: bars[i].t, d: bars[i].d, m: bars[i].m, price: bars[i].c, ...extra });
+    for (let i = 30; i < n; i++) {
+      const b = bars[i], p = bars[i - 1];
+      const e1 = I.e9[i] - I.e20[i], e0 = I.e9[i - 1] - I.e20[i - 1];
+      if (!isn(e1) && !isn(e0) && sg(e1) !== sg(e0) && sg(e1) !== 0) add(i, "ema", sg(e1), sg(e1) > 0 ? "EMA9 تقاطع صعودًا فوق EMA20" : "EMA9 تقاطع هبوطًا تحت EMA20");
+      const h1 = I.m.hist[i], h0 = I.m.hist[i - 1];
+      if (!isn(h1) && !isn(h0) && sg(h1) !== sg(h0) && sg(h1) !== 0) add(i, "macd", sg(h1), sg(h1) > 0 ? "MACD تقاطع إيجابي (تحسن الزخم)" : "MACD تقاطع سلبي (ضعف الزخم)");
+      if (intraday && !isn(I.vw[i]) && !isn(I.vw[i - 1]) && p.d === b.d) {
+        const s1 = sg(b.c - I.vw[i]), s0 = sg(p.c - I.vw[i - 1]);
+        if (s1 !== s0 && s1 !== 0) add(i, "vwap", s1, s1 > 0 ? "أغلق فوق VWAP (استعادة)" : "أغلق تحت VWAP (فقدان)");
+      }
+      const r1 = I.r[i], r0 = I.r[i - 1];
+      if (!isn(r1) && !isn(r0)) {
+        if (r0 >= 30 && r1 < 30) add(i, "rsi", 0, `RSI دخل تشبع البيع (${r1.toFixed(0)})`);
+        if (r0 <= 70 && r1 > 70) add(i, "rsi", 0, `RSI دخل تشبع الشراء (${r1.toFixed(0)})`);
+      }
+      if (i >= 22) {
+        const win = bars.slice(i - 21, i - 1), res = Math.max(...win.map((x) => x.h)), sup = Math.min(...win.map((x) => x.l));
+        if (b.c > res && p.c <= res) add(i, "brk", 1, `اختراق مقاومة ${px(res)} (إغلاق فوقها)`, { level: res });
+        if (b.c < sup && p.c >= sup) add(i, "brk", -1, `كسر دعم ${px(sup)} (إغلاق تحته)`, { level: sup });
+      }
+      const [pt, name] = C.candlePattern(bars.slice(i - 1, i + 1));
+      if (pt) add(i, "candle", pt, `شمعة ${name}`);
+      if (i >= 21) {
+        const avg = mean(bars.slice(i - 20, i).map((x) => x.v));
+        if (avg > 0 && b.v >= 3 * avg) add(i, "vol", 0, `حجم ${(b.v / avg).toFixed(1)}× متوسط آخر 20 شمعة`);
+      }
+    }
+    const piv = C.confirmedPivots(bars, 3);
+    for (const [pivs, key, dir, word] of [[piv.lo, "l", 1, "انفراج إيجابي: السعر قاع أدنى وRSI قاع أعلى"], [piv.hi, "h", -1, "انفراج سلبي: السعر قمة أعلى وRSI قمة أدنى"]]) {
+      for (let j = 1; j < pivs.length; j++) {
+        const [i1, p1] = pivs[j - 1], [i2, p2] = pivs[j];
+        if (i2 - i1 > 40 || isn(I.r[i1]) || isn(I.r[i2])) continue;
+        const ok = dir > 0 ? p2 < p1 && I.r[i2] > I.r[i1] : p2 > p1 && I.r[i2] < I.r[i1];
+        const at = Math.min(n - 1, i2 + 3);
+        if (ok && at >= 30) { add(at, "div", dir, word); lines.push({ dir, a: [i1, p1, I.r[i1]], b: [i2, p2, I.r[i2]] }); }
+      }
+    }
+    out.sort((x, y) => x.i - y.i);
+    const numbered = out.filter((s) => s.k !== "candle").slice(-8);
+    numbered.forEach((s, k) => (s.num = k + 1));
+    return { list: out, lines, numbered };
+  }
+  /** أقرب مقاومة فوق السعر وأقرب دعم تحته من قمم/قيعان مؤكدة، مع عدد اللمسات. */
+  function zones(bars, I, price) {
+    const a = lastOf(I.a) || price * 0.01, look = bars.slice(-120), { hi, lo } = C.confirmedPivots(look, 3);
+    const pick = (arr, test) => {
+      const cand = arr.filter(([, p]) => test(p)).map(([, p]) => ({ p, touches: arr.filter(([, q]) => Math.abs(q - p) <= 0.4 * a).length }));
+      if (!cand.length) return null;
+      cand.sort((x, y) => y.touches - x.touches || Math.abs(x.p - price) - Math.abs(y.p - price));
+      return { ...cand[0], half: 0.15 * a };
+    };
+    return { res: pick(hi, (p) => p > price * 1.0005), sup: pick(lo, (p) => p < price * 0.9995), atr: a };
+  }
+  const niceStep = (r) => { const e = Math.pow(10, Math.floor(Math.log10(r))), f = r / e; return (f < 1.5 ? 1 : f < 3.5 ? 2 : f < 7.5 ? 5 : 10) * e; };
+
+  // ---------------------------------------------------------------- الرسم التفاعلي
+  function create(canvas, opts = {}) {
+    const st = { n: 80, off: 0, cross: null, show: { vwap: true, ema: true, lv: true, sig: true, zones: true, rsi: true, macd: true, ...(opts.show || {}) }, d: null, cache: null, key: "", raf: 0, geom: null };
+    const ptrs = new Map();
+    let drag = null, pinch = null;
+
+    function setData(d) {
+      const key = `${d.sym}|${d.tf}`;
+      if (key !== st.key) { st.key = key; st.off = 0; st.cross = null; st.n = d.tf === "1Day" ? 120 : 80; st.cache = null; }
+      st.d = d;
+      const ck = `${d.bars.length}|${d.bars.length ? d.bars[d.bars.length - 1].t : 0}`;
+      if (!st.cache || st.cache.ck !== ck) {
+        const I = indicators(d.bars, d.intraday), S = scan(d.bars, I, d.intraday);
+        st.cache = { ck, I, S, Z: d.bars.length ? zones(d.bars, I, d.bars[d.bars.length - 1].c) : null };
+        if (opts.onSignals) opts.onSignals(S.numbered, d);
+      }
+      schedule();
+    }
+    function schedule() { if (st.raf) return; const f = typeof requestAnimationFrame === "function" ? requestAnimationFrame : (fn) => setTimeout(fn, 16); st.raf = f(() => { st.raf = 0; try { draw(); } catch (e) { console.error("chart", e); } }); }
+
+    function draw() {
+      const d = st.d; if (!d || !d.bars.length) return;
+      const dpr = (typeof devicePixelRatio !== "undefined" && devicePixelRatio) || 1;
+      const W = canvas.clientWidth || 320, H = canvas.clientHeight || 440;
+      if (canvas.width !== Math.round(W * dpr) || canvas.height !== Math.round(H * dpr)) { canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr); }
+      const ctx = canvas.getContext("2d"); if (!ctx) return;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.direction = "ltr"; ctx.textBaseline = "middle";
+      const { I, S, Z } = st.cache, show = st.show;
+      const all = d.forming ? d.bars.concat([d.forming]) : d.bars, total = all.length;
+      const axisW = 68, timeH = 20, plotW = W - axisW, gap = 6;
+      const base = H - timeH - 8, rsiH = show.rsi ? Math.round(base * 0.16) : 0, macdH = show.macd ? Math.round(base * 0.16) : 0;
+      const priceH = base - rsiH - macdH - (rsiH ? gap : 0) - (macdH ? gap : 0);
+      const yTop = 46, rsiTop = yTop + priceH + gap, macdTop = yTop + priceH + gap + (rsiH ? rsiH + gap : 0);
+      st.n = Math.max(20, Math.min(300, st.n));
+      const slots = st.n + 5, cw = plotW / slots;
+      st.off = Math.max(0, Math.min(st.off, Math.max(0, total - 10)));
+      const e = total - st.off, s = Math.max(0, e - st.n), x = (i) => (i - (e - st.n) + 0.5) * cw;
+      st.geom = { cw, s, e, plotW, axisW, W, H, yTop, priceH, rsiTop, rsiH, macdTop, macdH };
+
+      // ----- نطاق السعر
+      const vis = all.slice(s, e);
+      let lo = Math.min(...vis.map((b) => b.l)), hi = Math.max(...vis.map((b) => b.h));
+      const rng0 = hi - lo || hi * 0.01 || 0.01;
+      const extra = [];
+      if (show.lv && d.intraday) Object.keys(LV).forEach((k) => { if (!isn(d.levels[k])) extra.push(d.levels[k]); });
+      if (show.zones && Z) { if (Z.res) extra.push(Z.res.p); if (Z.sup) extra.push(Z.sup.p); }
+      if (!isn(d.inval)) extra.push(d.inval);
+      extra.forEach((v) => { if (v > lo - 0.5 * rng0 && v < hi + 0.5 * rng0) { lo = Math.min(lo, v); hi = Math.max(hi, v); } });
+      const pad = (hi - lo) * 0.06 || 0.01; lo -= pad; hi += pad;
+      const pH = priceH * 0.86, y = (p) => yTop + pH * (1 - (p - lo) / (hi - lo));
+      const clipY = (v) => Math.max(yTop, Math.min(yTop + priceH, v));
+
+      // ----- خلفية وشبكة
+      ctx.fillStyle = COL.bg; ctx.fillRect(0, 0, W, H);
+      ctx.font = "10px system-ui, sans-serif"; ctx.lineWidth = 1;
+      const step = niceStep((hi - lo) / 5);
+      ctx.strokeStyle = COL.grid; ctx.fillStyle = COL.axis; ctx.textAlign = "left";
+      for (let v = Math.ceil(lo / step) * step; v < hi; v += step) { const yy = y(v); ctx.beginPath(); ctx.moveTo(0, yy); ctx.lineTo(plotW, yy); ctx.stroke(); ctx.fillText(px(v), plotW + 5, yy); }
+      const every = Math.max(1, Math.ceil(78 / cw));
+      ctx.textAlign = "center";
+      let prevDay = null;
+      for (let i = s; i < e; i++) {
+        const b = all[i], xx = x(i);
+        if (prevDay !== null && b.d !== prevDay && d.intraday) { ctx.strokeStyle = "#22344d"; ctx.setLineDash([3, 4]); ctx.beginPath(); ctx.moveTo(xx - cw / 2, yTop); ctx.lineTo(xx - cw / 2, H - timeH); ctx.stroke(); ctx.setLineDash([]); ctx.fillStyle = COL.text; ctx.fillText(b.d.slice(5), xx, H - 8); }
+        else if (i % every === 0) { ctx.strokeStyle = COL.grid; ctx.beginPath(); ctx.moveTo(xx, yTop); ctx.lineTo(xx, H - timeH); ctx.stroke(); ctx.fillStyle = COL.axis; ctx.fillText(d.intraday ? hhmm(b.m) : b.d.slice(5), xx, H - 8); }
+        prevDay = b.d;
+      }
+      ctx.save(); ctx.beginPath(); ctx.rect(0, 0, plotW, H); ctx.clip();
+
+      // ----- مناطق الدعم والمقاومة
+      const tags = [];
+      if (show.zones && Z) {
+        [[Z.res, "R", COL.dn], [Z.sup, "S", COL.up]].forEach(([z, nm, col]) => {
+          if (!z) return;
+          ctx.fillStyle = col + "22"; ctx.fillRect(0, y(z.p + z.half), plotW, Math.max(2, y(z.p - z.half) - y(z.p + z.half)));
+          ctx.strokeStyle = col + "99"; ctx.setLineDash([6, 3]); ctx.beginPath(); ctx.moveTo(0, y(z.p)); ctx.lineTo(plotW, y(z.p)); ctx.stroke(); ctx.setLineDash([]);
+          ctx.fillStyle = col; ctx.textAlign = "left"; ctx.fillText(`${nm} ×${z.touches}`, 6, y(z.p) - 7);
+          tags.push({ y: y(z.p), text: `${nm} ${px(z.p)}`, col });
+        });
+      }
+      // ----- مستويات اليوم
+      if (show.lv && d.intraday) {
+        Object.entries(LV).forEach(([k, [nm, col]]) => {
+          const v = d.levels[k]; if (isn(v) || v < lo || v > hi) return;
+          ctx.strokeStyle = col + "bb"; ctx.setLineDash([2, 4]); ctx.beginPath(); ctx.moveTo(0, y(v)); ctx.lineTo(plotW, y(v)); ctx.stroke(); ctx.setLineDash([]);
+          tags.push({ y: y(v), text: `${nm} ${px(v)}`, col });
+        });
+      }
+      if (!isn(d.inval) && d.inval > lo && d.inval < hi) {
+        ctx.strokeStyle = "#ff5252"; ctx.lineWidth = 1.2; ctx.setLineDash([1, 3]); ctx.beginPath(); ctx.moveTo(0, y(d.inval)); ctx.lineTo(plotW, y(d.inval)); ctx.stroke(); ctx.setLineDash([]); ctx.lineWidth = 1;
+        tags.push({ y: y(d.inval), text: "INV " + px(d.inval), col: "#ff5252" });
+      }
+      // ----- الحجم
+      const maxV = Math.max(...vis.map((b) => b.v)) || 1, vTop = yTop + priceH, bw = Math.max(1, cw * 0.7);
+      vis.forEach((b, k) => { const i = s + k; ctx.fillStyle = (b.c >= b.o ? COL.up : COL.dn) + "55"; const h = (b.v / maxV) * priceH * 0.13; ctx.fillRect(x(i) - bw / 2, vTop - h, bw, h); });
+      // ----- المتوسطات وVWAP
+      const line = (arr, col, w, dash, byDay) => {
+        ctx.strokeStyle = col; ctx.lineWidth = w; ctx.setLineDash(dash || []); ctx.beginPath(); let on = false;
+        for (let i = s; i < Math.min(e, arr.length); i++) { const v = arr[i]; if (byDay && i > 0 && all[i].d !== all[i - 1].d) on = false; if (isn(v) || v < lo - (hi - lo) || v > hi + (hi - lo)) { on = false; continue; } on ? ctx.lineTo(x(i), y(v)) : ctx.moveTo(x(i), y(v)); on = true; }
+        ctx.stroke(); ctx.setLineDash([]); ctx.lineWidth = 1;
+      };
+      if (show.ema) { line(I.e50, COL.ema50, 1.2); line(I.e20, COL.ema20, 1.2); line(I.e9, COL.ema9, 1.2); if (!d.intraday) line(I.s200, COL.sma200, 1.4); }
+      if (show.vwap && d.intraday) line(I.vw, COL.vwap, 1.6, [5, 3], true);
+      // ----- الشموع
+      vis.forEach((b, k) => {
+        const i = s + k, up = b.c >= b.o, col = up ? COL.up : COL.dn, forming = d.forming && i === total - 1;
+        ctx.strokeStyle = col; ctx.fillStyle = col;
+        ctx.beginPath(); ctx.moveTo(x(i), y(b.h)); ctx.lineTo(x(i), y(b.l)); ctx.stroke();
+        const top = Math.min(y(b.o), y(b.c)), h = Math.max(1, Math.abs(y(b.o) - y(b.c)));
+        if (forming) { ctx.fillStyle = col + "33"; ctx.fillRect(x(i) - bw / 2, top, bw, h); ctx.setLineDash([2, 2]); ctx.strokeRect(x(i) - bw / 2, top, bw, h); ctx.setLineDash([]); }
+        else ctx.fillRect(x(i) - bw / 2, top, bw, h);
+      });
+      // ----- انفراج RSI على السعر
+      if (show.sig) S.lines.forEach((L) => {
+        if (L.b[0] < s || L.a[0] >= e) return;
+        ctx.strokeStyle = L.dir > 0 ? COL.up : COL.dn; ctx.setLineDash([4, 3]); ctx.lineWidth = 1.4; ctx.beginPath(); ctx.moveTo(x(L.a[0]), y(L.a[1])); ctx.lineTo(x(L.b[0]), y(L.b[1])); ctx.stroke(); ctx.setLineDash([]); ctx.lineWidth = 1;
+      });
+      // ----- علامات الإشارات
+      if (show.sig) S.list.forEach((g) => {
+        if (g.i < s || g.i >= e) return;
+        const b = all[g.i], xx = x(g.i), col = g.dir > 0 ? COL.up : g.dir < 0 ? COL.dn : COL.mid, small = !g.num;
+        const r = small ? 3 : 5;
+        let yy;
+        ctx.fillStyle = col;
+        ctx.beginPath();
+        if (g.dir > 0) { yy = y(b.l) + 9 + (small ? 0 : 4); ctx.moveTo(xx, yy - r); ctx.lineTo(xx - r, yy + r); ctx.lineTo(xx + r, yy + r); }
+        else if (g.dir < 0) { yy = y(b.h) - 9 - (small ? 0 : 4); ctx.moveTo(xx, yy + r); ctx.lineTo(xx - r, yy - r); ctx.lineTo(xx + r, yy - r); }
+        else { yy = y(b.h) - 9; ctx.moveTo(xx, yy - r); ctx.lineTo(xx + r, yy); ctx.lineTo(xx, yy + r); ctx.lineTo(xx - r, yy); }
+        ctx.closePath(); ctx.fill();
+        if (g.num) {
+          const ny = g.dir > 0 ? yy + 15 : yy - 15;
+          ctx.beginPath(); ctx.arc(xx, ny, 7, 0, Math.PI * 2); ctx.fillStyle = "#0b1220"; ctx.fill(); ctx.strokeStyle = col; ctx.stroke();
+          ctx.fillStyle = col; ctx.textAlign = "center"; ctx.font = "bold 9px system-ui, sans-serif"; ctx.fillText(String(g.num), xx, ny + 0.5); ctx.font = "10px system-ui, sans-serif";
+        }
+      });
+      // ----- السعر الحالي
+      const lastP = d.price !== null && d.price !== undefined ? d.price : all[total - 1].c;
+      if (lastP > lo && lastP < hi) {
+        const col = d.chg >= 0 ? COL.up : COL.dn;
+        ctx.strokeStyle = col; ctx.setLineDash([2, 2]); ctx.beginPath(); ctx.moveTo(0, y(lastP)); ctx.lineTo(plotW, y(lastP)); ctx.stroke(); ctx.setLineDash([]);
+        tags.push({ y: y(lastP), text: px(lastP), col, strong: true });
+        if (e === total) { ctx.fillStyle = col; ctx.beginPath(); ctx.arc(x(total - 1) + cw * 0.9, y(lastP), 3, 0, Math.PI * 2); ctx.fill(); }
+      }
+      ctx.restore();
+      // ----- وسوم المحور (بدون تداخل)
+      tags.sort((p, q) => p.y - q.y);
+      for (let k = 1; k < tags.length; k++) if (tags[k].y - tags[k - 1].y < 13) tags[k].y = tags[k - 1].y + 13;
+      tags.forEach((t) => { ctx.fillStyle = t.col; ctx.fillRect(plotW + 1, t.y - 7, axisW - 2, 14); ctx.fillStyle = t.strong ? "#fff" : "#0b1220"; ctx.font = (t.strong ? "bold " : "") + "10px system-ui, sans-serif"; ctx.textAlign = "left"; ctx.fillText(t.text, plotW + 4, t.y); });
+      ctx.font = "10px system-ui, sans-serif";
+
+      // ----- لوحة RSI
+      const pane = (top, h) => { ctx.strokeStyle = "#1c2b40"; ctx.strokeRect(0.5, top + 0.5, plotW - 1, h - 1); };
+      if (rsiH) {
+        pane(rsiTop, rsiH);
+        const yr = (v) => rsiTop + rsiH * (1 - v / 100);
+        ctx.fillStyle = "#42a5f522"; ctx.fillRect(0, yr(70), plotW, yr(30) - yr(70));
+        ctx.strokeStyle = "#2c405c"; ctx.setLineDash([3, 3]); [30, 70].forEach((v) => { ctx.beginPath(); ctx.moveTo(0, yr(v)); ctx.lineTo(plotW, yr(v)); ctx.stroke(); }); ctx.setLineDash([]);
+        ctx.strokeStyle = "#ce93d8"; ctx.lineWidth = 1.3; ctx.beginPath(); let on = false;
+        for (let i = s; i < Math.min(e, I.r.length); i++) { const v = I.r[i]; if (isn(v)) { on = false; continue; } on ? ctx.lineTo(x(i), yr(v)) : ctx.moveTo(x(i), yr(v)); on = true; }
+        ctx.stroke(); ctx.lineWidth = 1;
+        if (show.sig) S.lines.forEach((L) => { if (L.b[0] < s || L.a[0] >= e) return; ctx.strokeStyle = L.dir > 0 ? COL.up : COL.dn; ctx.setLineDash([4, 3]); ctx.beginPath(); ctx.moveTo(x(L.a[0]), yr(L.a[2])); ctx.lineTo(x(L.b[0]), yr(L.b[2])); ctx.stroke(); ctx.setLineDash([]); });
+        ctx.fillStyle = COL.axis; ctx.textAlign = "left"; ctx.fillText("70", plotW + 5, yr(70)); ctx.fillText("30", plotW + 5, yr(30));
+        ctx.fillStyle = "#ce93d8"; ctx.fillText("RSI " + (lastOf(I.r) === null ? "—" : lastOf(I.r).toFixed(0)), 5, rsiTop + 8);
+      }
+      // ----- لوحة MACD
+      if (macdH) {
+        pane(macdTop, macdH);
+        const hs = I.m.hist.slice(s, e).filter((v) => !isn(v)), ls = I.m.line.slice(s, e).concat(I.m.signal.slice(s, e)).filter((v) => !isn(v));
+        const mx = Math.max(1e-9, ...hs.map(Math.abs), ...ls.map(Math.abs)), ym = (v) => macdTop + macdH / 2 - (v / mx) * (macdH / 2 - 3);
+        ctx.strokeStyle = "#2c405c"; ctx.beginPath(); ctx.moveTo(0, ym(0)); ctx.lineTo(plotW, ym(0)); ctx.stroke();
+        for (let i = s; i < Math.min(e, I.m.hist.length); i++) { const v = I.m.hist[i]; if (isn(v)) continue; ctx.fillStyle = (v >= 0 ? COL.up : COL.dn) + "aa"; ctx.fillRect(x(i) - bw / 2, Math.min(ym(0), ym(v)), bw, Math.max(1, Math.abs(ym(v) - ym(0)))); }
+        const ln = (arr, col) => { ctx.strokeStyle = col; ctx.lineWidth = 1.2; ctx.beginPath(); let on2 = false; for (let i = s; i < Math.min(e, arr.length); i++) { const v = arr[i]; if (isn(v)) { on2 = false; continue; } on2 ? ctx.lineTo(x(i), ym(v)) : ctx.moveTo(x(i), ym(v)); on2 = true; } ctx.stroke(); ctx.lineWidth = 1; };
+        ln(I.m.line, "#42a5f5"); ln(I.m.signal, "#ff9800");
+        ctx.fillStyle = COL.axis; ctx.textAlign = "left"; ctx.fillText("MACD", 5, macdTop + 8);
+      }
+
+      // ----- الترويسة
+      const ci = st.cross && st.cross.i >= s && st.cross.i < e ? st.cross.i : null;
+      const hb = all[ci !== null ? ci : total - 1], hi_ = ci !== null ? ci : total - 1, isForming = d.forming && hi_ === total - 1;
+      const col = hb.c >= hb.o ? COL.up : COL.dn;
+      ctx.textAlign = "left"; ctx.font = "bold 11px system-ui, sans-serif"; ctx.fillStyle = COL.text;
+      let xx = 6; const seg = (txt, c) => { ctx.fillStyle = c; ctx.fillText(txt, xx, 12); xx += ctx.measureText(txt).width + 6; };
+      seg(`${d.sym} · ${d.tf}`, COL.text); ctx.font = "10px system-ui, sans-serif";
+      seg(`O ${px(hb.o)}`, col); seg(`H ${px(hb.h)}`, col); seg(`L ${px(hb.l)}`, col); seg(`C ${px(hb.c)}`, col);
+      xx = 6; const at = (arr) => (hi_ < arr.length && !isn(arr[hi_]) ? px(arr[hi_]) : "—");
+      const y2 = 26; const seg2 = (txt, c) => { ctx.fillStyle = c; ctx.fillText(txt, xx, y2); xx += ctx.measureText(txt).width + 8; };
+      if (show.ema) { seg2("EMA9 " + at(I.e9), COL.ema9); seg2("20 " + at(I.e20), COL.ema20); seg2("50 " + at(I.e50), COL.ema50); }
+      if (show.vwap && d.intraday) seg2("VWAP " + at(I.vw), COL.vwap);
+      if (ci !== null) { ctx.fillStyle = COL.axis; ctx.fillText(`${timeLabel(hb, d.intraday)} · Vol ${hb.v >= 1e6 ? (hb.v / 1e6).toFixed(2) + "M" : hb.v >= 1e3 ? (hb.v / 1e3).toFixed(1) + "K" : hb.v}${isForming ? " · LIVE" : ""}`, 6, 40); }
+      // وسم الحالة
+      const live = d.live || {};
+      ctx.textAlign = "right"; ctx.font = "bold 10px system-ui, sans-serif";
+      ctx.fillStyle = live.ok ? COL.up : COL.axis; ctx.fillText((live.ok ? "● LIVE" : "● " + (live.label || "OFF")) + (live.lag !== null && live.lag !== undefined && live.ok ? ` · lag ${live.lag < 10 ? live.lag.toFixed(1) : Math.round(live.lag)}s` : ""), plotW - 6, 40);
+      ctx.font = "10px system-ui, sans-serif";
+
+      // ----- مؤشر التقاطع
+      if (ci !== null) {
+        const cx = x(ci), cy = Math.max(yTop, Math.min(yTop + priceH, st.cross.y));
+        ctx.strokeStyle = "#8397adaa"; ctx.setLineDash([3, 3]); ctx.beginPath(); ctx.moveTo(cx, yTop); ctx.lineTo(cx, H - timeH); ctx.moveTo(0, cy); ctx.lineTo(plotW, cy); ctx.stroke(); ctx.setLineDash([]);
+        const pv = lo + (1 - (cy - yTop) / pH) * (hi - lo);
+        ctx.fillStyle = "#34495e"; ctx.fillRect(plotW + 1, cy - 7, axisW - 2, 14); ctx.fillStyle = "#fff"; ctx.textAlign = "left"; ctx.fillText(px(pv), plotW + 4, cy);
+      }
+    }
+
+    // ----- اللمس والفأرة
+    const rectX = (ev) => { const r = canvas.getBoundingClientRect(); return { x: ev.clientX - r.left, y: ev.clientY - r.top }; };
+    const idxAt = (px_) => { const g = st.geom; return g ? Math.max(g.s, Math.min(g.e - 1, g.s + Math.floor(px_ / g.cw))) : null; };
+    canvas.addEventListener("pointerdown", (ev) => {
+      ptrs.set(ev.pointerId, rectX(ev));
+      try { canvas.setPointerCapture(ev.pointerId); } catch (e) { /* jsdom */ }
+      if (ptrs.size === 2) { const [a, b] = [...ptrs.values()]; pinch = { d0: Math.hypot(a.x - b.x, a.y - b.y) || 1, n0: st.n }; drag = null; }
+      else drag = { x0: rectX(ev).x, y0: rectX(ev).y, off0: st.off, t0: Date.now(), moved: false };
+    });
+    canvas.addEventListener("pointermove", (ev) => {
+      if (!ptrs.has(ev.pointerId)) { if (ev.pointerType === "mouse" && st.geom) { const p = rectX(ev); st.cross = { i: idxAt(p.x), y: p.y }; schedule(); } return; }
+      ptrs.set(ev.pointerId, rectX(ev));
+      if (pinch && ptrs.size === 2) { const [a, b] = [...ptrs.values()]; st.n = Math.round(pinch.n0 * pinch.d0 / (Math.hypot(a.x - b.x, a.y - b.y) || 1)); schedule(); return; }
+      if (drag && st.geom) {
+        const p = rectX(ev), dx = p.x - drag.x0;
+        if (Math.abs(dx) > 6 || drag.moved) { drag.moved = true; st.off = drag.off0 + Math.round(dx / st.geom.cw); st.cross = null; schedule(); }
+      }
+    });
+    const up = (ev) => {
+      const had = ptrs.delete(ev.pointerId);
+      if (ptrs.size < 2) pinch = null;
+      if (had && drag && !drag.moved && Date.now() - drag.t0 < 400 && st.geom) {
+        const p = rectX(ev), i = idxAt(p.x);
+        st.cross = st.cross && st.cross.i === i ? null : { i, y: p.y }; schedule();
+      }
+      if (!ptrs.size) drag = null;
+    };
+    canvas.addEventListener("pointerup", up); canvas.addEventListener("pointercancel", up);
+    canvas.addEventListener("pointerleave", (ev) => { if (ev.pointerType === "mouse") { st.cross = null; schedule(); } });
+
+    return {
+      setData, draw: schedule, state: st,
+      zoom(f) { st.n = Math.round(st.n * f); schedule(); },
+      reset() { st.off = 0; st.n = st.d && st.d.tf === "1Day" ? 120 : 80; st.cross = null; schedule(); },
+      toggle(k) { st.show[k] = !st.show[k]; if (opts.onShow) opts.onShow(st.show); schedule(); },
+    };
+  }
+  return { create, scan, zones, indicators, timeLabel, px };
+})();
+if (typeof module !== "undefined") module.exports = Chart;
+
+</script>
+<script>
 /* لوحة تحليل الأسهم الأمريكية — اتصال مباشر من المتصفح بـ Alpaca (REST + WebSocket). بدون وسيط = أقل تأخير.
    تحليل فقط: القرار قرارك. المفاتيح تُحفظ في جهازك فقط (localStorage). */
 (function () {
@@ -454,7 +798,7 @@ if (typeof module !== "undefined") module.exports = Core;
   const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const SYM_RE = /^[A-Z][A-Z.\-]{0,5}$/;
   const num = (x, d = 2) => (x === null || x === undefined || Number.isNaN(x) ? "—" : Number(x).toFixed(x !== 0 && Math.abs(x) < 1 ? 3 : d));
-  const pct = (x) => (x === null || x === undefined || Number.isNaN(x) ? "—" : (x >= 0 ? "+" : "") + x.toFixed(1) + "%");
+  const pct = (x) => (x === null || x === undefined || Number.isNaN(x) ? "—" : `<bdi dir="ltr">${x >= 0 ? "+" : ""}${x.toFixed(1)}%</bdi>`);
   const big = (x) => (x === null || x === undefined ? "—" : x >= 1e9 ? (x / 1e9).toFixed(1) + "B" : x >= 1e6 ? (x / 1e6).toFixed(1) + "M" : x >= 1e3 ? (x / 1e3).toFixed(0) + "K" : String(Math.round(x)));
   const cls = (x) => (x > 0 ? "up" : x < 0 ? "dn" : "");
 
@@ -468,8 +812,8 @@ if (typeof module !== "undefined") module.exports = Core;
     watch: Store.get("watch", ["SPY", "QQQ", "IWM"]),
     filters: Store.get("filters", { minPrice: 0.3, maxPrice: 20, minPct: 0, minRvol: 0, minVol: 0, minAvgVol: 0, minDollar: 0, minAtr: 0, maxAtr: 100, minCap: 0 }),
     cfgAlerts: Store.get("cfgAlerts", { sound: false, rsiLow: 30, rsiHigh: 70, rvolSpike: 3, volSurge: 5 }),
-    bars1m: {}, daily: {}, trade: {}, snap: {}, mcap: {}, alerts: [], seen: {}, prev: {}, analysis: {},
-    ws: { state: "off", ticks: 0, lastMsg: 0, lastTrade: 0 }, rtt: null, skew: 0, tab: "overview", open: null, tf: "5Min",
+    bars1m: {}, daily: {}, trade: {}, live: {}, snap: {}, mcap: {}, alerts: [], seen: {}, prev: {}, analysis: {},
+    ws: { state: "off", ticks: 0, lastMsg: 0, lastTrade: 0, lag: null }, rtt: null, skew: 0, tab: "overview", open: null, tf: "5Min",
   };
   const now = () => Date.now() + S.skew;
 
@@ -517,18 +861,38 @@ if (typeof module !== "undefined") module.exports = Core;
     nb.forEach((b) => m.set(b.t, b));
     return [...m.values()].sort((a, b) => a.t - b.t);
   }
+  const mergeRaw = (a, b) => { const m = new Map(a.map((x) => [x.t, x])); b.forEach((x) => m.set(x.t, x)); return [...m.values()].sort((p, q) => Date.parse(p.t) - Date.parse(q.t)); };
+  /** الشموع اليومية تتغير مرة واحدة باليوم: نحفظ القديم في الجهاز ونجلب آخر 8 أيام فقط (أسرع بكثير). */
+  async function dailyFor(sym) {
+    const c = Store.get("d_" + sym, null), today = C.nyParts(now()).d;
+    const base = c && c.bars && c.bars.length > 200 ? c.bars : [];
+    const full = !base.length || now() - Date.parse(base[base.length - 1].t) > 6 * 86400000;
+    const j = await API.bars([sym], "1Day", isoDaysAgo(full ? 430 : 8));
+    const fresh = j[sym] || [], merged = full ? fresh : mergeRaw(base, fresh);
+    const keep = merged.filter((b) => C.nyParts(Date.parse(b.t)).d < today).slice(-320);
+    if (keep.length > 200) {
+      Store.set("d_" + sym, { bars: keep });
+      const idx = Store.get("d_index", []).filter((x) => x !== sym); idx.push(sym);
+      while (idx.length > 40) Store.set("d_" + idx.shift(), null);
+      Store.set("d_index", idx);
+    }
+    return merged;
+  }
   async function loadSymbol(sym, force) {
     const st = S.loaded = S.loaded || {}, fl = S.inflight = S.inflight || {};
     if (fl[sym]) return fl[sym];
     if (st[sym] && !force && now() - st[sym] < 15000) return;
     fl[sym] = (async () => {
       try {
-        const [m, d] = await Promise.all([API.bars([sym], "1Min", isoDaysAgo(9)), API.bars([sym], "1Day", isoDaysAgo(430))]);
+        const mP = API.bars([sym], "1Min", isoDaysAgo(9)), dP = dailyFor(sym);
+        dP.catch(() => {});
+        const m = await mP;
         S.bars1m[sym] = mergeBars(S.bars1m[sym] || [], (m[sym] || []).map(C.toBar));
-        S.daily[sym] = (d[sym] || []).map(C.toDaily);
-        st[sym] = now();
-        refresh(sym);
-        throttle("ui", 150, renderLive);
+        if (!S.daily[sym]) S.daily[sym] = [];
+        refresh(sym); throttle("ui", 30, renderLive);
+        const d = await dP;
+        S.daily[sym] = d.map(C.toDaily); st[sym] = now();
+        refresh(sym); throttle("ui", 30, renderLive);
       } finally { delete fl[sym]; }
     })();
     return fl[sym];
@@ -584,14 +948,41 @@ if (typeof module !== "undefined") module.exports = Core;
   }
   function onTrade(m) {
     S.ws.ticks++;
-    S.ws.lastTrade = Date.parse(m.t);
-    S.trade[m.S] = { p: m.p, s: m.s, t: Date.parse(m.t) };
-    throttle("ui", 400, renderLive);
+    const t = Date.parse(m.t);
+    S.ws.lastTrade = t;
+    const lag = Math.max(0, (now() - t) / 1000);
+    S.ws.lag = S.ws.lag === null ? lag : S.ws.lag * 0.8 + lag * 0.2;
+    S.trade[m.S] = { p: m.p, s: m.s, t };
+    const q = C.nyParts(t);
+    if (q.m >= 570 && q.m <= 959) {
+      const k = Math.floor(t / 60000), L = S.live[m.S];
+      if (!L || L.k !== k) S.live[m.S] = { k, o: m.p, h: m.p, l: m.p, c: m.p, v: m.s || 0 };
+      else { L.h = Math.max(L.h, m.p); L.l = Math.min(L.l, m.p); L.c = m.p; L.v += m.s || 0; }
+    }
+    if (m.S === S.open && S.tab === "analysis") chartLive(); else throttle("ui", 400, renderLive);
   }
   function onBar(m) {
     const b = C.toBar({ t: m.t, o: m.o, h: m.h, l: m.l, c: m.c, v: m.v });
     S.bars1m[m.S] = mergeBars(S.bars1m[m.S] || [], [b]);
-    throttle("an:" + m.S, 1500, () => { refresh(m.S); renderLive(); });
+    throttle("an:" + m.S, m.S === S.open ? 200 : 1500, () => { refresh(m.S); renderLive(); });
+  }
+  /** الشمعة الحية للإطار الحالي: دقائق مكتملة من البث + الدقيقة الجارية من الصفقات. لا تدخل في التحليل. */
+  function formingBar(sym, tf) {
+    if (tf === "1Day" || !marketState().open) return null;
+    const N = C.MIN[tf], nowMs = now(), ny = C.nyParts(nowMs);
+    const bucket = 570 + Math.floor((ny.m - 570) / N) * N;
+    const curMin = Math.floor(nowMs / 60000) * 60000, bt = curMin - (ny.m - bucket) * 60000;
+    const A = S.analysis[sym], fr = A && A.frames[tf], lastT = fr && fr.length ? fr[fr.length - 1].t : 0;
+    if (bt <= lastT) return null;
+    const parts = (S.bars1m[sym] || []).filter((b) => b.t >= bt && b.t < curMin);
+    const L = S.live[sym];
+    const cur = L && L.k * 60000 >= bt && !parts.some((b) => b.t === L.k * 60000) ? { o: L.o, h: L.h, l: L.l, c: L.c, v: L.v } : null;
+    const seq = parts.concat(cur ? [cur] : []);
+    if (!seq.length) return null;
+    const f = { t: bt, d: ny.d, m: bucket, o: seq[0].o, h: Math.max(...seq.map((x) => x.h)), l: Math.min(...seq.map((x) => x.l)), c: seq[seq.length - 1].c, v: seq.reduce((a, x) => a + x.v, 0) };
+    const tr = S.trade[sym];
+    if (tr && tr.t >= bt) { f.c = tr.p; f.h = Math.max(f.h, tr.p); f.l = Math.min(f.l, tr.p); }
+    return f;
   }
   /** بعد انقطاع الاتصال: نعيد تحميل شموع الدقيقة لسد الفجوة، ونعرض مقدار النقص. */
   async function fillGaps() {
@@ -733,34 +1124,6 @@ if (typeof module !== "undefined") module.exports = Core;
     return c.join("");
   };
 
-  // ---------------------------------------------------------------- رسم الشموع
-  function drawChart(canvas, bars, A, tf) {
-    const ctx = canvas.getContext("2d"), W = canvas.width = canvas.clientWidth * (devicePixelRatio || 1), H = canvas.height = canvas.clientHeight * (devicePixelRatio || 1);
-    ctx.clearRect(0, 0, W, H);
-    const N = Math.min(bars.length, 90), v = bars.slice(-N);
-    if (!v.length) return;
-    const closes = bars.map((b) => b.c);
-    const e9 = C.ema(closes, 9).slice(-N), e20 = C.ema(closes, 20).slice(-N), e50 = C.ema(closes, 50).slice(-N);
-    const vw = C.sessionVwap(bars, tf !== "1Day").slice(-N);
-    let lo = Math.min(...v.map((b) => b.l)), hi = Math.max(...v.map((b) => b.h));
-    const pad = (hi - lo) * 0.05 || 0.01; lo -= pad; hi += pad;
-    const x = (i) => (i + 0.5) * (W / N), y = (p) => H * 0.82 * (1 - (p - lo) / (hi - lo)), bw = Math.max(1, (W / N) * 0.6);
-    const maxV = Math.max(...v.map((b) => b.v)) || 1;
-    ctx.font = `${11 * (devicePixelRatio || 1)}px sans-serif`;
-    v.forEach((b, i) => {
-      const up = b.c >= b.o; ctx.strokeStyle = ctx.fillStyle = up ? "#2ecc71" : "#e74c3c";
-      ctx.beginPath(); ctx.moveTo(x(i), y(b.h)); ctx.lineTo(x(i), y(b.l)); ctx.stroke();
-      ctx.fillRect(x(i) - bw / 2, Math.min(y(b.o), y(b.c)), bw, Math.max(1, Math.abs(y(b.o) - y(b.c))));
-      ctx.globalAlpha = 0.35; ctx.fillRect(x(i) - bw / 2, H - (b.v / maxV) * H * 0.16, bw, (b.v / maxV) * H * 0.16); ctx.globalAlpha = 1;
-    });
-    const line = (arr, color, w = 1.2, dash) => { ctx.strokeStyle = color; ctx.lineWidth = w * (devicePixelRatio || 1); ctx.setLineDash(dash || []); ctx.beginPath(); let st = false; arr.forEach((p, i) => { if (Number.isNaN(p)) return; st ? ctx.lineTo(x(i), y(p)) : ctx.moveTo(x(i), y(p)); st = true; }); ctx.stroke(); ctx.setLineDash([]); };
-    line(e9, "#f1c40f"); line(e20, "#3498db"); line(e50, "#9b59b6"); line(vw, "#ecf0f1", 1.4, [4, 3]);
-    const lv = A.levels || {};
-    [["HOD", "#2ecc71"], ["LOD", "#e74c3c"], ["PDH", "#7f8c8d"], ["PDL", "#7f8c8d"]].forEach(([k, col]) => {
-      if (lv[k] && lv[k] > lo && lv[k] < hi) { ctx.strokeStyle = col; ctx.setLineDash([2, 4]); ctx.beginPath(); ctx.moveTo(0, y(lv[k])); ctx.lineTo(W, y(lv[k])); ctx.stroke(); ctx.setLineDash([]); ctx.fillStyle = col; ctx.fillText(k + " " + num(lv[k]), 4, y(lv[k]) - 3); }
-    });
-  }
-
   // ---------------------------------------------------------------- عرض
   const TABS = [["overview", "نظرة السوق"], ["movers", "الأكثر حركة"], ["volume", "حجم غير عادي"], ["momentum", "الزخم"], ["breakout", "الاختراقات"], ["watch", "قائمتي"], ["analysis", "تحليل سهم"], ["alerts", "التنبيهات"]];
   let scan = null, scanning = false;
@@ -770,14 +1133,18 @@ if (typeof module !== "undefined") module.exports = Core;
     return `<span class="badge ${c}" title="${esc(cat || "")}">${Math.round(sc)}</span>`;
   }
   function renderStatus() {
-    const w = S.ws, age = w.lastTrade ? Math.round((now() - w.lastTrade) / 1000) : null;
-    const open = marketState();
-    const dataType = !S.key ? "لا مفاتيح" : w.state === "live" ? (open.open ? "لحظية (IEX)" : "السوق مغلق") : "غير متصل";
-    $("#status").innerHTML = `<span class="dot ${w.state === "live" ? "ok" : w.state === "connecting" ? "wait" : "bad"}"></span> ${w.state === "live" ? "متصل" : w.state === "connecting" ? "يتصل…" : "منقطع"}`
-      + ` · <b>${dataType}</b> · ${open.label}`
-      + (age !== null ? ` · آخر صفقة قبل ${fmtAge(age)}${open.open && age > 120 ? " ⚠" : ""}` : "")
-      + (S.rtt !== null ? ` · استجابة ${S.rtt}ms` : "") + " · المصدر IEX (حجم جزئي، ما قبل الافتتاح محدود)"
-      + (S.gaps && Object.keys(S.gaps).length ? ` · ⚠ نقص بيانات: ${Object.entries(S.gaps).map(([s, m]) => s + " " + m + "د").join("، ")}` : "");
+    const w = S.ws, age = w.lastTrade ? Math.round((now() - w.lastTrade) / 1000) : null, open = marketState(), ok = w.state === "live";
+    const dataType = !S.key ? "لا مفاتيح" : ok ? (open.open ? "لحظية (IEX)" : "السوق مغلق") : "غير متصل";
+    const P = (h, c) => `<span class="pill ${c || ""}">${h}</span>`;
+    const stale = open.open && age !== null && age > 120;
+    $("#status").innerHTML = P(`<span class="dot ${ok ? "ok" : w.state === "connecting" ? "wait" : "bad"}"></span> <b>${ok ? "متصل" : w.state === "connecting" ? "يتصل…" : "منقطع"}</b>`)
+      + P(`<b>${dataType}</b>`) + P(open.label)
+      + (age !== null && open.open ? P(`آخر صفقة قبل <b>${fmtAge(age)}</b>${stale ? " ⚠" : ""}`, stale ? "warn" : "") : "")
+      + (w.lag !== null && open.open && ok ? P(`تأخر البث <b>${w.lag < 1 ? "أقل من 1ث" : Math.round(w.lag) + "ث"}</b>`) : "")
+      + P("المصدر IEX · حجم جزئي")
+      + (S.gaps && Object.keys(S.gaps).length ? P(`⚠ نقص بيانات: ${Object.entries(S.gaps).map(([k, m]) => k + " " + m + "د").join("، ")}`, "warn") : "");
+    const h = document.querySelector("header");
+    if (h) document.documentElement.style.setProperty("--hh", h.offsetHeight + "px");
   }
   function marketState() {
     const p = C.nyParts(now()), dow = new Date(now()).getUTCDay();
@@ -877,37 +1244,91 @@ if (typeof module !== "undefined") module.exports = Core;
     $$("[data-rm]").forEach((a) => (a.onclick = () => { S.watch = S.watch.filter((x) => x !== a.dataset.rm); Store.set("watch", S.watch); wsSync(); render(); }));
     bindOpen();
   }
+  // ---------------------------------------------------------------- صفحة تحليل سهم + الشارت
+  let CH = null, skey = "", dynKey = "", lastR = null;
+  const TF_LABEL = { "1Min": "1د", "3Min": "3د", "5Min": "5د", "15Min": "15د", "30Min": "30د", "1Hour": "1س", "1Day": "يومي" };
+  const TGL = [["vwap", "VWAP"], ["ema", "EMA"], ["lv", "مستويات اليوم"], ["zones", "دعم/مقاومة"], ["sig", "الإشارات"], ["rsi", "RSI"], ["macd", "MACD"]];
   function analysisUI(el) {
-    el.innerHTML = `<div class="bar"><input id="asym" placeholder="رمز السهم" value="${esc(S.open || "")}" maxlength="6" autocapitalize="characters"><button id="ago">تحليل</button>
-      <select id="atf">${C.TFS.map((t) => `<option ${t === S.tf ? "selected" : ""}>${t}</option>`).join("")}</select><button id="aadd">+ قائمتي</button></div><div id="abox"><p class="empty">اكتب رمز سهم واضغط تحليل.</p></div>`;
-    $("#ago").onclick = () => { const s = $("#asym").value.trim().toUpperCase(); if (SYM_RE.test(s)) { S.open = s; S.tf = $("#atf").value; wsSync(); loadAnalysis(true); } };
-    $("#atf").onchange = () => { S.tf = $("#atf").value; renderAnalysisBox(); };
+    el.innerHTML = `<div class="bar"><input id="asym" placeholder="رمز السهم" value="${esc(S.open || "")}" maxlength="6" autocapitalize="characters"><button id="ago">تحليل</button><button id="aadd">+ قائمتي</button></div><div id="abox"><p class="empty">اكتب رمز سهم واضغط تحليل.</p></div>`;
+    CH = null; skey = ""; dynKey = "";
+    $("#ago").onclick = () => { const s = $("#asym").value.trim().toUpperCase(); if (SYM_RE.test(s)) { S.open = s; wsSync(); loadAnalysis(true); } };
     $("#aadd").onclick = () => { const s = S.open; if (s && !S.watch.includes(s) && S.watch.length < 30) { S.watch.push(s); Store.set("watch", S.watch); wsSync(); $("#aadd").textContent = "تمت الإضافة"; } };
     if (S.open) renderAnalysisBox();
   }
   async function loadAnalysis(force) {
     if (!S.open) return;
     const box = $("#abox"); if (box) box.innerHTML = '<p class="empty">جارٍ تحميل البيانات…</p>';
+    skey = ""; dynKey = "";
     try { await loadSymbol(S.open, force); } catch (e) { if (box) box.innerHTML = `<p class="empty">تعذر جلب البيانات: ${esc(e.message)}</p>`; return; }
     renderAnalysisBox();
+  }
+  function chartData(sym) {
+    const A = S.analysis[sym]; if (!A || !A.frames[S.tf]) return null;
+    const ok = S.ws.state === "live" && marketState().open;
+    return { sym, tf: S.tf, bars: A.frames[S.tf], forming: formingBar(sym, S.tf), levels: A.levels, inval: lastR ? lastR.invalidation.px : null, intraday: S.tf !== "1Day",
+      price: lastPrice(sym), chg: chgPct(sym), live: { ok, label: S.ws.state === "live" ? "CLOSED" : "OFF", lag: S.ws.lag } };
+  }
+  function chartLive() {
+    if (!CH || !S.open) return;
+    const d = chartData(S.open); if (!d) return;
+    CH.setData(d); updateHead();
+  }
+  function freshText() {
+    const A = S.analysis[S.open]; if (!A) return "";
+    const m1 = A.bars1m, last = m1.length ? m1[m1.length - 1].t : null, age = last ? (now() - last) / 1000 : null, open = marketState().open;
+    return age === null ? "لا بيانات" : open ? (age < 150 ? `لحظية (IEX) — آخر شمعة مكتملة قبل ${fmtAge(age)}` : `⚠ متأخرة — آخر شمعة مكتملة قبل ${fmtAge(age)}`) : `السوق مغلق — آخر شمعة قبل ${fmtAge(age)}`;
+  }
+  function updateHead() {
+    const p = lastPrice(S.open), c = chgPct(S.open), hp = $("#hp"), hc = $("#hc"), fr = $("#fresh");
+    if (hp) { hp.textContent = num(p); hp.className = "big2 " + cls(c); }
+    if (hc) { hc.innerHTML = pct(c); hc.className = cls(c); }
+    if (fr) fr.textContent = freshText();
+  }
+  function renderSigs(list, d) {
+    const el = $("#asig"); if (!el) return;
+    el.innerHTML = `<b>الإشارات المرسومة على الشارت (آخر ${list.length})</b><ol>` + (list.length ? list.slice().reverse().map((g) => `<li><span class="num ${g.dir > 0 ? "up" : g.dir < 0 ? "dn" : "mid"}">${g.num}</span><div><b>${esc(g.text)}</b><div class="note">${esc(Chart.timeLabel(g, d.intraday))} (نيويورك) · سعر الإغلاق ${num(g.price)}</div></div></li>`).join("") : "<li>لا إشارات في هذه الفترة.</li>")
+      + `</ol><p class="note">علامات وصفية لأحداث وقعت فعلًا على شموع مكتملة. ليست توصية، ولا تعني أن السعر سيتحرك بنفس الاتجاه.</p>`;
   }
   function renderAnalysisBox() {
     const box = $("#abox"); if (!box || !S.open) return;
     const A = S.analysis[S.open];
-    if (!A) { box.innerHTML = '<p class="empty">لا توجد بيانات كافية.</p>'; return; }
+    if (!A) { box.innerHTML = '<p class="empty">لا توجد بيانات كافية.</p>'; skey = ""; return; }
     const r = A.results[S.tf];
-    if (!r) { box.innerHTML = `<p class="empty">بيانات غير كافية لإطار ${S.tf} (يلزم 30 شمعة مكتملة على الأقل). جرّب إطارًا آخر.</p>`; return; }
-    const m1 = A.bars1m, last = m1.length ? m1[m1.length - 1].t : null;
-    const age = last ? (now() - last) / 1000 : null, open = marketState().open;
-    const meta = { fresh: age === null ? "لا بيانات" : open ? (age < 150 ? `لحظية (IEX) — آخر شمعة قبل ${fmtAge(age)}` : `⚠ متأخرة — آخر شمعة قبل ${fmtAge(age)}`) : `السوق مغلق — آخر شمعة قبل ${fmtAge(age)}` };
-    const R = C.report(S.open, A.results, S.tf, A.frames[S.tf], A.levels, meta);
+    if (!r) {
+      box.innerHTML = `<p class="empty">بيانات غير كافية لإطار ${S.tf} (يلزم 30 شمعة مكتملة على الأقل). جرّب إطارًا آخر.</p><div class="ctool"><div class="seg" id="atfs">${C.TFS.map((t) => `<button data-tf="${t}" class="${t === S.tf ? "on" : ""}">${TF_LABEL[t]}</button>`).join("")}</div></div>`;
+      $$("#atfs button").forEach((b) => (b.onclick = () => { S.tf = b.dataset.tf; skey = ""; renderAnalysisBox(); }));
+      skey = ""; return;
+    }
+    const sk = S.open + "|" + S.tf;
+    if (skey !== sk || !$("#chart")) {
+      box.innerHTML = `<div class="head" id="ahead"></div>
+        <div class="ctool"><div class="seg" id="atfs">${C.TFS.map((t) => `<button data-tf="${t}" class="${t === S.tf ? "on" : ""}">${TF_LABEL[t]}</button>`).join("")}</div>
+          <div class="seg" id="azoom"><button data-z="0.8" aria-label="تكبير">＋</button><button data-z="1.25" aria-label="تصغير">－</button><button data-z="r" aria-label="إعادة">⟲</button></div></div>
+        <div class="ctool"><div class="tg" id="atg">${TGL.map(([k, t]) => `<button data-k="${k}">${t}</button>`).join("")}</div></div>
+        <div class="chartwrap"><canvas id="chart"></canvas></div>
+        <div class="legend"><span>R مقاومة</span><span>S دعم</span><span>INV مستوى إبطال القراءة</span><span>HOD/LOD أعلى/أدنى اليوم</span><span>PDH/PDL أعلى/أدنى أمس</span><span>PMH/PML ما قبل السوق</span><span>ORH/ORL النطاق الافتتاحي</span><span>▲▼ حدث فني مرقّم</span><span>الشمعة المتقطعة = حية، ولا تدخل في التحليل حتى تكتمل</span></div>
+        <div class="sigs" id="asig"></div><div id="adyn"></div>`;
+      CH = Chart.create($("#chart"), { show: Store.get("chartShow", {}), onShow: (v) => Store.set("chartShow", v), onSignals: renderSigs });
+      const sync = () => $$("#atg button").forEach((b) => b.classList.toggle("on", !!CH.state.show[b.dataset.k]));
+      sync();
+      $$("#atg button").forEach((b) => (b.onclick = () => { CH.toggle(b.dataset.k); sync(); }));
+      $$("#azoom button").forEach((b) => (b.onclick = () => (b.dataset.z === "r" ? CH.reset() : CH.zoom(parseFloat(b.dataset.z)))));
+      $$("#atfs button").forEach((b) => (b.onclick = () => { S.tf = b.dataset.tf; skey = ""; renderAnalysisBox(); }));
+      skey = sk; dynKey = "";
+    }
+    const lv = A.levels, dk = `${r.last.t}|${r.score}|${A.bars1m.length}|${lv.HOD}|${lv.LOD}`;
+    if (dk !== dynKey) { dynKey = dk; fillDynamic(A, r); }
+    chartLive();
+  }
+  function fillDynamic(A, r) {
+    const meta = { fresh: freshText() };
+    const R = C.report(S.open, A.results, S.tf, A.frames[S.tf], A.levels, meta); lastR = R;
     const F = R.facts, p = lastPrice(S.open), c = chgPct(S.open);
     const li = (a) => (a.length ? a.map((x) => `<li>${esc(x)}</li>`).join("") : "<li>—</li>");
-    box.innerHTML = `<div class="head"><div><b class="big2">${esc(S.open)}</b> <span class="big2 ${cls(c)}">${num(p)}</span> <span class="${cls(c)}">${pct(c)}</span></div>
+    $("#ahead").innerHTML = `<div><b class="big2">${esc(S.open)}</b> <span id="hp" class="big2 ${cls(c)}">${num(p)}</span> <span id="hc" class="${cls(c)}">${pct(c)}</span></div>
       <div class="gauge"><div class="gfill ${R.score >= 60 ? "up" : R.score <= 40 ? "dn" : "mid"}" style="width:${R.score}%"></div></div>
-      <div><b>${Math.round(R.score)}/100</b> — ${esc(R.category)} <span class="note">(على إطار ${esc(S.tf)} فقط)</span></div></div>
-      <canvas id="chart"></canvas>
-      <h3>الحقائق (من البيانات)</h3>
+      <div><b>${Math.round(R.score)}/100</b> — ${esc(R.category)} <span class="note">(على إطار ${esc(S.tf)} فقط)</span></div>`;
+    $("#adyn").innerHTML = `<h3>الحقائق (من البيانات)</h3>
       <div class="grid">${[["RVOL", F.rvol ? F.rvol.toFixed(1) + "×" : "—"], ["RSI", F.rsi ? F.rsi.toFixed(0) : "—"], ["MACD", num(F.macd, 3)], ["إشارة", num(F.signal, 3)], ["هيستوغرام", num(F.hist, 3)], ["EMA9", num(F.ema9)], ["EMA20", num(F.ema20)], ["EMA50", num(F.ema50)], ["SMA200", num(F.sma200)], ["VWAP", num(F.vwap)], ["ATR", `${num(F.atr)} (${F.atr_pct ? F.atr_pct.toFixed(1) : "—"}%)`], ["شموع محللة", r.bars]].map(([k, v]) => `<div><span>${k}</span><b>${v}</b></div>`).join("")}</div>
       <div class="levels">${Object.entries(R.levels).filter(([k]) => R.levelNames[k]).map(([k, v]) => `<span class="chip">${R.levelNames[k]} ${num(v)}</span>`).join("")}</div>
       <h3>القراءة التفسيرية</h3><p class="read">${esc(R.reading)}</p>
@@ -918,9 +1339,8 @@ if (typeof module !== "undefined") module.exports = Core;
       <h3>السيناريوهات</h3><p>🟢 <b>الإيجابي:</b> ${esc(R.scenarioUp)}</p><p>🔴 <b>السلبي:</b> ${esc(R.scenarioDown)}</p>
       <p class="inval">⛔ <b>مستوى إبطال القراءة:</b> ${esc(R.invalidation.text)}</p>
       ${R.risks.length ? `<div class="warnbox"><b>⚠ مخاطر</b><ul>${li(R.risks)}</ul></div>` : ""}
-      <p class="note">البيانات: ${esc(meta.fresh)} · المصدر IEX · آخر شمعة مكتملة ${new Date(r.last.t).toLocaleString("ar-SA", { timeZone: "America/New_York" })} (نيويورك)</p>
+      <p class="note">البيانات: <span id="fresh">${esc(meta.fresh)}</span> · المصدر IEX · آخر شمعة مكتملة ${new Date(r.last.t).toLocaleString("ar-SA", { timeZone: "America/New_York" })} (نيويورك)</p>
       <p class="note">${esc(R.disclaimer)}</p>`;
-    drawChart($("#chart"), A.frames[S.tf], A, S.tf);
   }
   function alertsUI(el) {
     const mine = S.alerts;
@@ -956,11 +1376,11 @@ if (typeof module !== "undefined") module.exports = Core;
   function start() { render(); if (S.key && S.secret) { wsDelay = 1000; wsConnect(); S.watch.forEach((s) => loadSymbol(s).catch(() => {})); } }
   function init() {
     $("#gear").onclick = settings;
-    setInterval(() => { renderStatus(); if (S.tab === "alerts") alertsUI($("#body")); }, 5000);
+    setInterval(() => { renderStatus(); if (S.tab === "alerts") alertsUI($("#body")); if (S.tab === "analysis") updateHead(); }, 3000);
     setInterval(wsSync, 5000);
     start();
   }
-  window.FT = { S, API, init, detectAlerts, staleness, passFilters, mergeBars, pushAlert };
+  window.FT = { S, API, init, detectAlerts, staleness, passFilters, mergeBars, pushAlert, formingBar, onTrade };
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init); else init();
 })();
 
