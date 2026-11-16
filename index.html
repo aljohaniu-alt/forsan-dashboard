@@ -1882,6 +1882,7 @@ if (typeof module !== "undefined") module.exports = Chart;
     if (hp) { hp.textContent = num(p); hp.className = "big2 " + cls(c); }
     if (hc) { hc.innerHTML = pct(c); hc.className = cls(c); }
     const ho = $("#ho"); if (ho) ho.innerHTML = offHoursHtml(S.open);
+    const ra = $("#rdage"); if (ra) ra.textContent = readAge();
     if (fr) fr.textContent = freshText();
   }
   function renderSigs(list, d) {
@@ -1998,6 +1999,15 @@ if (typeof module !== "undefined") module.exports = Chart;
       detail: `<div class="lbl">قراءة مؤشر السيولة (الخط الأزرق أسفل الشارت)</div><ul class="sl"><li>دخول تقريبي: <bdi dir="ltr">${K(f.inV)}</bdi> سهم · خروج تقريبي: <bdi dir="ltr">${K(f.outV)}</bdi> سهم</li><li>الصافي: <bdi dir="ltr">${K(f.net)}</bdi> سهم · آخر 15 دقيقة: ${l15} (<bdi dir="ltr">${K(f.last15)}</bdi>)</li>${tr ? `<li>${esc(tr)}</li>` : ""}</ul><div class="note">تقدير من الشموع وبيانات IEX الجزئية، وليس أوامر حقيقية.</div>`,
     };
   }
+  /** عمر القراءة: السعر والسيولة لحظيان، أما الاتجاه والدرجة فيُحسبان من الشموع المكتملة ويتجددان مع إغلاق كل شمعة. */
+  function readAge() {
+    const A = S.analysis[S.open], fr = A && A.frames[S.tf], last = fr && fr.length ? fr[fr.length - 1] : null;
+    if (!last) return "";
+    if (S.tf === "1Day") return "السعر لحظي · الاتجاه والدرجة من الشموع اليومية المكتملة";
+    const end = last.t + C.MIN[S.tf] * 60000, s = Math.max(0, Math.round((now() - end) / 1000));
+    const age = s < 60 ? `${s} ثانية` : `${Math.round(s / 60)} دقيقة`;
+    return `السعر والسيولة لحظيان · الاتجاه والدرجة يتجددان مع إغلاق كل شمعة (${TF_LABEL[S.tf] || S.tf}) · آخر تحديث للقراءة قبل ${age}`;
+  }
   function simpleCard(A, R, p, c) {
     const bars = A.frames[S.tf], n = bars.length, I = Chart.indicators(bars, S.tf !== "1Day"), T = Chart.trend(bars, I), F = R.facts;
     const st = T ? Chart.STATE[T.state] : ["غير واضح", "بيانات قليلة لرسم اتجاه"], k = T ? T.state : "unclear", col = k === "up" ? "up" : k === "down" ? "dn" : "mid", arrow = k === "up" ? "↗" : k === "down" ? "↘" : k === "side" ? "↔" : "•";
@@ -2021,6 +2031,7 @@ if (typeof module !== "undefined") module.exports = Chart;
         <div class="tile" id="flowt">${fp.tile}</div>
         <div class="tile"><small>الدرجة الفنية</small><b><bdi dir="ltr">${Math.round(R.score)}/100</bdi></b><span>على إطار ${esc(TF_LABEL[S.tf] || S.tf)}</span></div>
         <div class="tile"><small>حجم التداول</small><b>${esc(vol)}</b></div></div>
+      <div class="note rdage" id="rdage">${readAge()}</div>
       ${warn.map((w) => `<div class="wn">⚠ ${esc(w)}</div>`).join("")}
       <details class="dt"><summary>تفاصيل القراءة</summary><div class="lbl">الاتجاه حسب آخر القمم والقيعان</div><div class="tdesc">${esc(st[1])}</div>
         <ul class="sl">${L.map((x) => `<li>${esc(x)}</li>`).join("")}</ul><div id="flowd">${fp.detail}</div>
