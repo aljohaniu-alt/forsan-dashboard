@@ -389,6 +389,17 @@ const Core = (function () {
       peakVol: pk && { m: pk.m, v: pk.v }, peakIn: pkIn && { m: pkIn.m, net: pkIn.net }, peakOut: pkOut && { m: pkOut.m, net: pkOut.net },
       state: !tot ? "flat" : inV / tot >= 0.55 ? "in" : inV / tot <= 0.45 ? "out" : "flat", slots: list };
   }
+  // سلسلة تدفق السيولة التقديري لكل شمعة: الصافي (دخول - خروج) والتراكمي (يبدأ من الصفر كل يوم)
+  function flowSeries(bars, intraday) {
+    const net = [], cum = [];
+    let acc = 0, day = null;
+    for (const b of bars) {
+      const r = b.h - b.l, buy = r > 0 ? b.v * (b.c - b.l) / r : b.v * (b.c > b.o ? 1 : b.c < b.o ? 0 : 0.5), n = buy - (b.v - buy);
+      if (intraday && b.d !== day) { acc = 0; day = b.d; }
+      acc += n; net.push(n); cum.push(acc);
+    }
+    return { net, cum };
+  }
   function todRvol(bars1m, lookback = 10) {
     const reg = bars1m.filter(isReg);
     if (!reg.length) return null;
@@ -514,7 +525,7 @@ const Core = (function () {
   }
 
   return { W, CAPS, TFS, MIN, DISC, clip, category, nyParts, toBar, toDaily, sma, ema, ewm, rsi, macd, atr, volumeRatio, rollingVwap, sessionVwap,
-    confirmedPivots, candlePattern, divergence, events, giveback, analyzeTF, resample, completed, levels, flow, todRvol, compare, interpret,
+    confirmedPivots, candlePattern, divergence, events, giveback, analyzeTF, resample, completed, levels, flow, flowSeries, todRvol, compare, interpret,
     invalidation, report, analyzeAll, isReg, fx };
 })();
 if (typeof module !== "undefined") module.exports = Core;
@@ -540,7 +551,7 @@ const Chart = (function () {
   // ---------------------------------------------------------------- المؤشرات والإشارات (دوال نقية)
   function indicators(bars, intraday) {
     const c = bars.map((b) => b.c);
-    return { e9: C.ema(c, 9), e20: C.ema(c, 20), e50: C.ema(c, 50), s200: C.sma(c, 200), vw: C.sessionVwap(bars, intraday), r: C.rsi(c), m: C.macd(c), a: C.atr(bars) };
+    return { e9: C.ema(c, 9), e20: C.ema(c, 20), e50: C.ema(c, 50), s200: C.sma(c, 200), vw: C.sessionVwap(bars, intraday), r: C.rsi(c), m: C.macd(c), a: C.atr(bars), f: C.flowSeries(bars, intraday) };
   }
   /** يمسح الشموع المكتملة ويسجل كل حدث فني وقع. كل إشارة تُحسب بمعلومات متاحة عند إغلاق شمعتها فقط. */
   function scan(bars, I, intraday) {
@@ -750,6 +761,7 @@ const Chart = (function () {
       return { title: x[0], tag: "مؤشر", dir: 0, rows: [["قيمته", px(v)], ["العلاقة بالسعر", `${rel} (${fmtp(chg(v))})`]], meaning: x[1], how: "يُحسب من أسعار الإغلاق للشموع المكتملة.", watch: "انتبه لميل الخط وللمسافة بين السعر والخط.", caution: "مؤشرات المتوسطات تتأخر عن السعر.", note: NOTE };
     }
     if (h.k === "pane") {
+      if (h.key === "FLOW") { const lc = lastOf(I.f.cum), ln = lastOf(I.f.net); return { title: "تدفق السيولة (تقدير)", tag: "مؤشر", dir: 0, rows: [["التراكمي الآن", lc === null ? "—" : Math.round(lc).toLocaleString("en-US")], ["آخر شمعة", ln === null ? "—" : Math.round(ln).toLocaleString("en-US")]], meaning: "الأعمدة: صافي الدخول (أخضر) أو الخروج (أحمر) في كل شمعة. الخط الأزرق: المجموع التراكمي من بداية اليوم. صعوده = الدخول يتفوق على الخروج.", how: "كل شمعة يُقسم حجمها بحسب مكان إغلاقها داخل مداها: قرب القمة = دخول، قرب القاع = خروج.", watch: "السعر يصعد والخط الأزرق ينزل = الصعود بلا دعم من السيولة. السعر ينزل والخط يصعد = العكس.", caution: "تقدير من الشموع وبيانات IEX الجزئية، وليس أوامر حقيقية.", note: NOTE }; }
       if (h.key === "RSI") { const v = lastOf(I.r); return { title: "RSI: مؤشر القوة النسبية", tag: "مؤشر", dir: 0, rows: [["القيمة الأخيرة", v === null ? "—" : v.toFixed(0)], ["المنطقة", v === null ? "—" : v > 70 ? "تشبع شراء" : v < 30 ? "تشبع بيع" : "محايدة"]], meaning: "يقيس سرعة الحركة من 0 إلى 100. فوق 70 تشبع شراء، وتحت 30 تشبع بيع، وحول 50 توازن.", how: "يُحسب من آخر 14 شمعة. الخطان المتقطعان عند 30 و70.", watch: "الخطوط المتقطعة الملونة بين قمتين أو قاعين هي انفراجات RSI مع السعر.", caution: "التشبع لا يعني انعكاسًا مضمونًا.", note: NOTE }; }
       const m = lastOf(I.m.line), sgn = lastOf(I.m.signal), hs = lastOf(I.m.hist);
       return { title: "MACD: تقارب وتباعد المتوسطات", tag: "مؤشر", dir: 0, rows: [["MACD", m === null ? "—" : m.toFixed(4)], ["الإشارة", sgn === null ? "—" : sgn.toFixed(4)], ["الهيستوغرام", hs === null ? "—" : hs.toFixed(4)]], meaning: "يقيس الفرق بين متوسطين (12 و26). الأعمدة الخضراء = الزخم إيجابي، والحمراء = سلبي، وتقاطع الخطين يسجَّل كإشارة.", how: "الأزرق خط MACD، والبرتقالي خط الإشارة (متوسط 9).", watch: "اتجاه الأعمدة: تكبر = الزخم يقوى، تصغر = يضعف.", caution: "يتأخر عن السعر.", note: NOTE };
@@ -760,7 +772,7 @@ const Chart = (function () {
 
   // ---------------------------------------------------------------- الرسم التفاعلي
   function create(canvas, opts = {}) {
-    const st = { n: 80, off: 0, cross: null, show: { vwap: true, ema: true, lv: true, sig: true, zones: true, rsi: true, macd: true, trend: true, ...(opts.show || {}) }, d: null, cache: null, key: "", raf: 0, geom: null, hits: [], sel: null };
+    const st = { n: 80, off: 0, cross: null, show: { vwap: true, ema: true, lv: true, sig: true, zones: true, rsi: true, macd: true, flow: true, trend: true, ...(opts.show || {}) }, d: null, cache: null, key: "", raf: 0, geom: null, hits: [], sel: null };
     const ptrs = new Map();
     let drag = null, pinch = null;
 
@@ -791,14 +803,14 @@ const Chart = (function () {
       const { I, S, Z } = st.cache, show = st.show;
       const all = d.forming ? d.bars.concat([d.forming]) : d.bars, total = all.length;
       const axisW = 68, timeH = 20, plotW = W - axisW, gap = 6;
-      const base = H - timeH - 8, rsiH = show.rsi ? Math.round(base * 0.16) : 0, macdH = show.macd ? Math.round(base * 0.16) : 0;
-      const priceH = base - rsiH - macdH - (rsiH ? gap : 0) - (macdH ? gap : 0);
-      const yTop = 46, rsiTop = yTop + priceH + gap, macdTop = yTop + priceH + gap + (rsiH ? rsiH + gap : 0);
+      const base = H - timeH - 8, rsiH = show.rsi ? Math.round(base * 0.16) : 0, macdH = show.macd ? Math.round(base * 0.16) : 0, flowH = show.flow ? Math.round(base * 0.18) : 0;
+      const priceH = base - rsiH - macdH - flowH - (rsiH ? gap : 0) - (macdH ? gap : 0) - (flowH ? gap : 0);
+      const yTop = 46, rsiTop = yTop + priceH + gap, macdTop = yTop + priceH + gap + (rsiH ? rsiH + gap : 0), flowTop = macdTop + (macdH ? macdH + gap : 0);
       st.n = Math.max(20, Math.min(300, st.n));
       const slots = st.n + 5, cw = plotW / slots;
       st.off = Math.max(0, Math.min(st.off, Math.max(0, total - 10)));
       const e = total - st.off, s = Math.max(0, e - st.n), x = (i) => (i - (e - st.n) + 0.5) * cw;
-      st.geom = { cw, s, e, plotW, axisW, W, H, yTop, priceH, rsiTop, rsiH, macdTop, macdH };
+      st.geom = { cw, s, e, plotW, axisW, W, H, yTop, priceH, rsiTop, rsiH, macdTop, macdH, flowTop, flowH };
       st.hits = [];
 
       // ----- نطاق السعر
@@ -971,6 +983,21 @@ const Chart = (function () {
         const ln = (arr, col) => { ctx.strokeStyle = col; ctx.lineWidth = 1.2; ctx.beginPath(); let on2 = false; for (let i = s; i < Math.min(e, arr.length); i++) { const v = arr[i]; if (isn(v)) { on2 = false; continue; } on2 ? ctx.lineTo(x(i), ym(v)) : ctx.moveTo(x(i), ym(v)); on2 = true; } ctx.stroke(); ctx.lineWidth = 1; };
         ln(I.m.line, "#42a5f5"); ln(I.m.signal, "#ff9800");
         ctx.fillStyle = COL.axis; ctx.textAlign = "left"; ctx.fillText("MACD", 5, macdTop + 8);
+      }
+
+      // ----- لوحة تدفق السيولة (تقدير)
+      if (flowH) {
+        pane(flowTop, flowH); st.hits.push({ k: "pane", id: "pFLOW", key: "FLOW", y0: flowTop, y1: flowTop + flowH });
+        const ns = I.f.net.slice(s, e), cs = I.f.cum.slice(s, e);
+        const mn = Math.max(1e-9, ...ns.map(Math.abs)), mc = Math.max(1e-9, ...cs.map(Math.abs));
+        const yn = (v) => flowTop + flowH / 2 - (v / mn) * (flowH / 2 - 3), yc = (v) => flowTop + flowH / 2 - (v / mc) * (flowH / 2 - 3);
+        ctx.strokeStyle = "#2c405c"; ctx.beginPath(); ctx.moveTo(0, yn(0)); ctx.lineTo(plotW, yn(0)); ctx.stroke();
+        for (let i = s; i < Math.min(e, I.f.net.length); i++) { const v = I.f.net[i]; ctx.fillStyle = (v >= 0 ? COL.up : COL.dn) + "88"; ctx.fillRect(x(i) - bw / 2, Math.min(yn(0), yn(v)), bw, Math.max(1, Math.abs(yn(v) - yn(0)))); }
+        ctx.strokeStyle = "#4dd0e1"; ctx.lineWidth = 1.4; ctx.beginPath();
+        for (let i = s; i < Math.min(e, I.f.cum.length); i++) i === s ? ctx.moveTo(x(i), yc(I.f.cum[i])) : ctx.lineTo(x(i), yc(I.f.cum[i]));
+        ctx.stroke(); ctx.lineWidth = 1;
+        const lc = lastOf(I.f.cum);
+        ctx.fillStyle = "#4dd0e1"; ctx.textAlign = "left"; ctx.fillText("تدفق السيولة (تقدير) " + (lc === null ? "" : (lc >= 0 ? "+" : "") + Math.round(lc).toLocaleString("en-US")), 5, flowTop + 8);
       }
 
       // ----- الترويسة
@@ -1598,11 +1625,11 @@ if (typeof module !== "undefined") module.exports = Chart;
     bindOpen();
   }
   // ---------------------------------------------------------------- صفحة تحليل سهم + الشارت
-  const SIMPLE_SHOW = { vwap: false, ema: false, lv: false, sig: false, rsi: false, macd: false, zones: true, trend: true };
-  const modeShow = () => (S.mode === "adv" ? { vwap: true, ema: true, lv: true, sig: true, zones: true, rsi: true, macd: true, trend: true, ...Store.get("chartShow", {}) } : SIMPLE_SHOW);
+  const SIMPLE_SHOW = { vwap: false, ema: false, lv: false, sig: false, rsi: false, macd: false, flow: true, zones: true, trend: true };
+  const modeShow = () => (S.mode === "adv" ? { vwap: true, ema: true, lv: true, sig: true, zones: true, rsi: true, macd: true, flow: true, trend: true, ...Store.get("chartShow", {}) } : SIMPLE_SHOW);
   let CH = null, skey = "", dynKey = "", lastR = null;
   const TF_LABEL = { "1Min": "1د", "3Min": "3د", "5Min": "5د", "15Min": "15د", "30Min": "30د", "1Hour": "1س", "1Day": "يومي" };
-  const TGL = [["vwap", "VWAP"], ["ema", "EMA"], ["lv", "مستويات اليوم"], ["zones", "دعم/مقاومة"], ["sig", "الإشارات"], ["rsi", "RSI"], ["macd", "MACD"]];
+  const TGL = [["vwap", "VWAP"], ["ema", "EMA"], ["lv", "مستويات اليوم"], ["zones", "دعم/مقاومة"], ["sig", "الإشارات"], ["rsi", "RSI"], ["macd", "MACD"], ["flow", "السيولة"]];
   function analysisUI(el) {
     el.innerHTML = `<div class="bar"><input id="asym" placeholder="رمز السهم" value="${esc(S.open || "")}" maxlength="6" autocapitalize="characters"><button id="ago">تحليل</button><button id="aadd">+ قائمتي</button></div><div id="abox"><p class="empty">اكتب رمز سهم واضغط تحليل.</p></div>`;
     CH = null; skey = ""; dynKey = "";
@@ -1741,21 +1768,15 @@ if (typeof module !== "undefined") module.exports = Chart;
   function flowCard(sym) {
     const A = S.analysis[sym]; if (!A) return "";
     const f = C.flow(A.bars1m); if (!f) return "";
-    const ref = A.bars1m.filter(C.isReg).slice(-1)[0];
-    const rt = (m) => new Date(ref.t + (m - ref.m) * 60000).toLocaleTimeString("en-GB", { timeZone: "Asia/Riyadh", hour: "2-digit", minute: "2-digit" });
     const K = (x) => { const a = Math.abs(x); return (x < 0 ? "-" : "") + (a >= 1e6 ? (a / 1e6).toFixed(2) + "M" : a >= 1e3 ? (a / 1e3).toFixed(1) + "K" : Math.round(a)); };
-    const D = (x) => "$" + K(x);
+    const t = A.bars1m.filter((b) => b.d === f.day && C.isReg(b)), fs = C.flowSeries(t, false), n = t.length, k = Math.min(30, n - 1);
+    const dP = k > 0 ? t[n - 1].c - t[n - 1 - k].c : 0, dF = k > 0 ? fs.cum[n - 1] - fs.cum[n - 1 - k] : 0;
+    const tr = !k ? "" : dF > 0 && dP >= 0 ? "السعر والسيولة يصعدان معًا في آخر 30 دقيقة: الصعود مدعوم بدخول." : dF < 0 && dP <= 0 ? "السعر والسيولة ينزلان معًا في آخر 30 دقيقة: الهبوط مصحوب بخروج." : dF < 0 && dP > 0 ? "السعر يصعد لكن السيولة تنزل: الصعود بلا دعم واضح من الدخول." : dF > 0 && dP < 0 ? "السعر ينزل لكن السيولة تصعد: الهبوط يقابله دخول." : "";
     const st = { in: ["دخول أكثر من خروج", "up"], out: ["خروج أكثر من دخول", "dn"], flat: ["متوازن", "mid"] }[f.state];
-    const sl = f.slots.filter((o) => o.share > 0), busy = sl.slice().sort((a, b) => b.share - a.share).slice(0, 2);
-    const inn = sl.slice().sort((a, b) => b.netPct - a.netPct)[0], out = sl.slice().sort((a, b) => a.netPct - b.netPct)[0];
-    const seg = (o) => `${rt(o.m)}–${rt(o.m + 30)}`;
-    const hist = f.days >= 3 ? `حسب ${f.days} أيام متاحة` : "الأيام المتاحة قليلة، فالنمط تقريبي";
-    return `<div class="simple"><div class="lbl">تدفق السيولة (تقدير من الشموع)</div><div class="trend ${st[1]}"><span class="tword">${esc(st[0])}</span><span class="tdesc">نسبة الدخول <bdi dir="ltr">${f.buyPct.toFixed(0)}%</bdi> من حجم اليوم</span>
-      <ul class="sl"><li>دخول تقريبي: <bdi dir="ltr">${K(f.inV)}</bdi> سهم (${D(f.inD)})</li><li>خروج تقريبي: <bdi dir="ltr">${K(f.outV)}</bdi> سهم (${D(f.outD)})</li><li>الصافي: <bdi dir="ltr">${K(f.net)}</bdi> سهم · آخر 15 دقيقة: <bdi dir="ltr">${K(f.last15)}</bdi></li>
-      ${f.peakIn ? `<li>أقوى دقيقة دخول اليوم ${rt(f.peakIn.m)} · أقوى دقيقة خروج ${rt(f.peakOut.m)} (توقيت الرياض)</li>` : ""}</ul>
-      ${busy.length ? `<div class="mini">أكثر الأوقات ازدحامًا: <b>${busy.map(seg).join(" و ")}</b></div>` : ""}
-      ${inn && out ? `<div class="mini">أكثر شريحة يميل فيها الدخول: <b>${seg(inn)}</b> · الخروج: <b>${seg(out)}</b></div>` : ""}
-      <div class="note">${hist}. تقدير من موضع إغلاق كل شمعة داخل مداها وبيانات IEX الجزئية، وليس أوامر حقيقية. وصف لما حدث وليس توصية. القرار قرارك.</div></div></div>`;
+    const l15 = f.last15 > 0 ? "دخول" : f.last15 < 0 ? "خروج" : "متوازن";
+    return `<div class="simple"><div class="lbl">قراءة مؤشر السيولة (الخط الأزرق أسفل الشارت)</div><div class="trend ${st[1]}"><span class="tword">${esc(st[0])}</span><span class="tdesc">نسبة الدخول <bdi dir="ltr">${f.buyPct.toFixed(0)}%</bdi> من حجم اليوم</span>
+      <ul class="sl"><li>دخول تقريبي: <bdi dir="ltr">${K(f.inV)}</bdi> سهم · خروج تقريبي: <bdi dir="ltr">${K(f.outV)}</bdi> سهم</li><li>الصافي: <bdi dir="ltr">${K(f.net)}</bdi> سهم · آخر 15 دقيقة: ${l15} (<bdi dir="ltr">${K(f.last15)}</bdi>)</li>${tr ? `<li>${esc(tr)}</li>` : ""}</ul>
+      <div class="note">تقدير من الشموع وبيانات IEX الجزئية، وليس أوامر حقيقية. وصف لما حدث وليس توصية. القرار قرارك.</div></div></div>`;
   }
   function simpleCard(A, R, p, c) {
     const bars = A.frames[S.tf], n = bars.length, I = Chart.indicators(bars, S.tf !== "1Day"), T = Chart.trend(bars, I), F = R.facts;
