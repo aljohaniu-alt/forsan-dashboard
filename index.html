@@ -701,7 +701,9 @@ const Chart = (function () {
 
     function setData(d) {
       const key = `${d.sym}|${d.tf}`;
-      if (key !== st.key) { st.key = key; st.off = 0; st.cross = null; st.n = Math.min(d.tf === "1Day" ? 120 : 80, Math.max(20, d.bars.length + 6)); st.cache = null; }
+      if (key !== st.key) { st.key = key; st.off = 0; st.cross = null; st.n = Math.min(d.tf === "1Day" ? 120 : 80, Math.max(20, d.bars.length + 6));
+        // لحظي: نبدأ بجلسة اليوم كاملة (مثل منصات التداول) بدل 80 شمعة قد تمتد لأيام وتضغط الحركة
+        if (d.intraday && d.bars.length) { const ld = d.bars[d.bars.length - 1].d; let k = 0; for (let i = d.bars.length - 1; i >= 0 && d.bars[i].d === ld; i--) k++; if (k >= 12) st.n = Math.max(30, Math.min(300, k + 6)); } st.cache = null; }
       st.d = d;
       const ck = `${d.bars.length}|${d.bars.length ? d.bars[d.bars.length - 1].t : 0}`;
       if (!st.cache || st.cache.ck !== ck) {
