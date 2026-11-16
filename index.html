@@ -51,7 +51,7 @@ canvas{display:block;width:100%;height:520px;touch-action:pan-y;user-select:none
 .alert{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:8px 14px;margin:8px 0}.alert.stale{opacity:.7;border-color:#6b4a1f}
 #settings{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:20;display:flex;align-items:center;justify-content:center}#settings[hidden]{display:none}.sheet{background:var(--panel);border-radius:16px;padding:16px;width:min(94vw,440px);max-height:90vh;overflow:auto}.sheet label{display:block;margin:8px 0;font-size:13px;color:var(--mut)}.sheet input{width:100%}
 .rm{color:var(--dn);cursor:pointer}.inl{display:inline-flex;gap:6px;align-items:center}h3{margin:18px 0 6px;font-size:16px}h4{margin:6px 0}
-.fsb{margin-inline-start:auto;padding:6px 14px;border-radius:10px;font-weight:700;border-color:var(--acc);color:var(--tx)}
+.livebtn{padding:6px 12px;border-radius:10px;font-weight:700;border:1px solid var(--line);color:var(--mut)}.livebtn.on{color:#ff5252;border-color:#ff5252}.livebtn.on::first-letter{animation:lvp 1.2s infinite}@keyframes lvp{50%{opacity:.25}}.fsb{margin-inline-start:auto;padding:6px 14px;border-radius:10px;font-weight:700;border-color:var(--acc);color:var(--tx)}
 #side{display:none}.fsrow{display:block}
 #pick{position:absolute;left:0;right:0;bottom:0;max-height:48%;overflow:auto;background:#0e1626f7;border-top:2px solid var(--acc);padding:8px 12px;direction:rtl;text-align:right;font-size:12.5px;z-index:3}#pick[hidden]{display:none}
 #pick .x{float:left;background:#1c2b40;border:0;color:var(--tx);border-radius:50%;width:30px;height:30px;font-size:15px}#pick .pt{font-size:14px;margin-bottom:4px}#pick h5{margin:8px 0 1px;color:var(--acc);font-size:12.5px}#pick p{margin:0;line-height:1.6}
@@ -1152,7 +1152,7 @@ if (typeof module !== "undefined") module.exports = Chart;
     set(k, v) { try { localStorage.setItem("ft_" + k, JSON.stringify(v)); } catch (e) { /* ممنوع/ممتلئ */ } },
   };
   const S = {
-    mode: Store.get("chartMode", "simple"),
+    mode: Store.get("chartMode", "simple"), liveMode: Store.get("liveMode", true),
     key: Store.get("key", ""), secret: Store.get("secret", ""), ntfy: Store.get("ntfy", ""), finnhub: Store.get("finnhub", ""),
     watch: Store.get("watch", ["SPY", "QQQ", "IWM"]),
     filters: Store.get("filters", { minPrice: 0.3, maxPrice: 20, minPct: 0, minRvol: 0, minVol: 0, minAvgVol: 0, minDollar: 0, minAtr: 0, maxAtr: 100, minCap: 0 }),
@@ -1771,6 +1771,22 @@ if (typeof module !== "undefined") module.exports = Chart;
     el.innerHTML = `<b>الإشارات المرسومة على الشارت (آخر ${list.length})</b><ol>` + (list.length ? list.slice().reverse().map((g) => `<li><span class="num ${g.dir > 0 ? "up" : g.dir < 0 ? "dn" : "mid"}">${g.num}</span><div><b>${esc(g.text)}</b><div class="note">${esc(Chart.timeLabel(g, d.intraday))} (نيويورك) · سعر الإغلاق ${num(g.price)}</div></div></li>`).join("") : "<li>لا إشارات في هذه الفترة.</li>")
       + `</ol><p class="note">علامات وصفية لأحداث وقعت فعلًا على شموع مكتملة. ليست توصية، ولا تعني أن السعر سيتحرك بنفس الاتجاه.</p>`;
   }
+  /** تحديث خفيف لذيل شموع الدقيقة للسهم المفتوح (يسد الفجوات حتى لو لم يصل البث). */
+  async function refreshTail(sym) {
+    const arr = S.bars1m[sym]; if (!arr || !arr.length) return loadSymbol(sym, true);
+    const j = await API.bars([sym], "1Min", new Date(arr[arr.length - 1].t - 60000).toISOString());
+    S.bars1m[sym] = mergeBars(S.bars1m[sym], (j[sym] || []).map(C.toBar)); refresh(sym);
+  }
+  function liveBtn() {
+    const b = $("#livebtn"); if (!b) return;
+    b.className = "livebtn" + (S.liveMode ? " on" : ""); b.textContent = S.liveMode ? "● مباشر" : "○ متوقف";
+  }
+  let tailBusy = false;
+  function liveTick(n) {
+    if (!S.liveMode || S.tab !== "analysis" || !S.open || !CH) return;
+    chartLive();
+    if (n % 8 === 0 && marketState().open && !tailBusy) { tailBusy = true; refreshTail(S.open).catch(() => {}).finally(() => { tailBusy = false; }); }
+  }
   function renderAnalysisBox() {
     const box = $("#abox"); if (!box || !S.open) return;
     const A = S.analysis[S.open];
@@ -1786,7 +1802,7 @@ if (typeof module !== "undefined") module.exports = Chart;
       box.innerHTML = `<div class="head" id="ahead"></div>
         <div id="cfs"><div class="ctool"><div class="seg" id="atfs">${C.TFS.map((t) => `<button data-tf="${t}" class="${t === S.tf ? "on" : ""}">${TF_LABEL[t]}</button>`).join("")}</div>
           <div class="seg" id="azoom"><button data-z="0.8" aria-label="تقريب">＋</button><button data-z="1.25" aria-label="إبعاد">－</button><button data-z="r" aria-label="إعادة">⟲</button></div>
-          <div class="seg" id="amode"><button data-m="simple">بسيط</button><button data-m="adv">متقدم</button></div><button id="fsbtn" class="fsb">⛶ تكبير</button></div>
+          <div class="seg" id="amode"><button data-m="simple">بسيط</button><button data-m="adv">متقدم</button></div><button id="livebtn" class="livebtn" aria-label="الداشبورد المباشر"></button><button id="fsbtn" class="fsb">⛶ تكبير</button></div>
         <div class="ctool tgrow"><div class="tg" id="atg">${TGL.map(([k, t]) => `<button data-k="${k}">${t}</button>`).join("")}</div></div>
         <div class="fsrow"><div class="chartwrap"><canvas id="chart"></canvas><div id="pick" hidden></div></div><aside id="side"></aside></div></div>
         <p class="note tiphint">اضغط على أي خط أو علامة داخل الشارت ليظهر شرحها.</p>
@@ -1798,6 +1814,9 @@ if (typeof module !== "undefined") module.exports = Chart;
       const syncMode = () => { $("#cfs").classList.toggle("adv", S.mode === "adv"); $$("#amode button").forEach((b) => b.classList.toggle("on", b.dataset.m === S.mode)); };
       syncMode(); $$("#amode button").forEach((b) => (b.onclick = () => { S.mode = b.dataset.m; Store.set("chartMode", S.mode); CH.setShow(modeShow()); syncMode(); sync(); renderSide(); }));
       $("#fsbtn").onclick = () => setFs(!S.fs); setFs(!!S.fs);
+      liveBtn(); $("#livebtn").onclick = () => { if (S.liveMode) { loadSymbol(S.open, true).catch(() => {}); chartLive(); S.liveFlash = now(); } else { S.liveMode = true; Store.set("liveMode", true); liveBtn(); chartLive(); } };
+      $("#livebtn").oncontextmenu = (e) => { e.preventDefault(); S.liveMode = !S.liveMode; Store.set("liveMode", S.liveMode); liveBtn(); };
+      wsSync();
       const sync = () => $$("#atg button").forEach((b) => b.classList.toggle("on", !!CH.state.show[b.dataset.k]));
       sync();
       $$("#atg button").forEach((b) => (b.onclick = () => { CH.toggle(b.dataset.k); sync(); }));
@@ -1929,10 +1948,11 @@ if (typeof module !== "undefined") module.exports = Chart;
     $("#gear").onclick = settings;
     setInterval(() => { renderStatus(); if (S.tab === "alerts") alertsUI($("#body")); if (S.tab === "analysis") updateHead(); }, 3000);
     setInterval(wsSync, 5000);
+    let lt = 0; setInterval(() => liveTick(lt++), 1000);
     setInterval(() => { const lq = $("#lq"); if (lq && S.open && S.tab === "analysis") lq.innerHTML = liveStrip(S.open); }, 1000);
     start();
   }
-  window.FT = { get CH() { return CH; }, offHours, S, API, init, detectAlerts, staleness, passFilters, mergeBars, pushAlert, buyPressure, candleFeed, onQuote, liveStrip, formingBar, onTrade };
+  window.FT = { get CH() { return CH; }, offHours, S, API, init, detectAlerts, staleness, passFilters, mergeBars, pushAlert, buyPressure, liveTick, liveBtn, candleFeed, onQuote, liveStrip, formingBar, onTrade };
   window.FT.surge3 = surge3;
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init); else init();
 })();
