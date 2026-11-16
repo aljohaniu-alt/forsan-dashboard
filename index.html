@@ -51,7 +51,7 @@ canvas{display:block;width:100%;height:520px;touch-action:pan-y;user-select:none
 .alert{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:8px 14px;margin:8px 0}.alert.stale{opacity:.7;border-color:#6b4a1f}
 #settings{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:20;display:flex;align-items:center;justify-content:center}#settings[hidden]{display:none}.sheet{background:var(--panel);border-radius:16px;padding:16px;width:min(94vw,440px);max-height:90vh;overflow:auto}.sheet label{display:block;margin:8px 0;font-size:13px;color:var(--mut)}.sheet input{width:100%}
 .rm{color:var(--dn);cursor:pointer}.inl{display:inline-flex;gap:6px;align-items:center}h3{margin:18px 0 6px;font-size:16px}h4{margin:6px 0}
-.livebtn{padding:6px 12px;border-radius:10px;font-weight:700;border:1px solid var(--line);color:var(--mut)}.livebtn.on{color:#ff5252;border-color:#ff5252}.livebtn.on::first-letter{animation:lvp 1.2s infinite}@keyframes lvp{50%{opacity:.25}}.fsb{margin-inline-start:auto;padding:6px 14px;border-radius:10px;font-weight:700;border-color:var(--acc);color:var(--tx)}
+.upd{position:fixed;bottom:14px;left:50%;transform:translateX(-50%);z-index:30;background:#16335c;color:#fff;border:1px solid #2a5aa8;border-radius:999px;padding:8px 16px;font-size:13px;box-shadow:0 8px 24px rgba(0,0,0,.5)}.livebtn{padding:6px 12px;border-radius:10px;font-weight:700;border:1px solid var(--line);color:var(--mut)}.livebtn.on{color:#ff5252;border-color:#ff5252}.livebtn.on::first-letter{animation:lvp 1.2s infinite}@keyframes lvp{50%{opacity:.25}}.fsb{margin-inline-start:auto;padding:6px 14px;border-radius:10px;font-weight:700;border-color:var(--acc);color:var(--tx)}
 #side{display:none}.fsrow{display:block}
 #pick{position:absolute;left:0;right:0;bottom:0;max-height:48%;overflow:auto;background:#0e1626f7;border-top:2px solid var(--acc);padding:8px 12px;direction:rtl;text-align:right;font-size:12.5px;z-index:3}#pick[hidden]{display:none}
 #pick .x{float:left;background:#1c2b40;border:0;color:var(--tx);border-radius:50%;width:30px;height:30px;font-size:15px}#pick .pt{font-size:14px;margin-bottom:4px}#pick h5{margin:8px 0 1px;color:var(--acc);font-size:12.5px}#pick p{margin:0;line-height:1.6}
@@ -135,7 +135,7 @@ details.dg{border:0;margin:2px 0 0;padding:0}details.dg>summary{color:var(--mut)
 </style>
 </head>
 <body>
-<header><div class="top"><div class="brand"><div class="logo"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 17l5-6 4 3 7-9" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><circle cx="20" cy="5" r="2" fill="#fff"/></svg></div><div><h1>لوحة السوق</h1><small>قراءة فنية فقط · القرار قرارك</small></div></div><button id="gear" aria-label="الإعدادات">⚙</button></div><div id="status"></div></header>
+<header><div class="top"><div class="brand"><div class="logo"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 17l5-6 4 3 7-9" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><circle cx="20" cy="5" r="2" fill="#fff"/></svg></div><div><h1>لوحة السوق</h1><small>قراءة فنية فقط · القرار قرارك · نسخة <bdi dir="ltr" id="ver">11-16 23:31 · 54bbbec</bdi></small></div></div><button id="gear" aria-label="الإعدادات">⚙</button></div><div id="status"></div></header>
 <nav id="tabs"></nav>
 <main id="body"></main>
 <div id="settings" hidden></div>
@@ -1414,6 +1414,24 @@ if (typeof module !== "undefined") module.exports = Chart;
     sock.onclose = () => { if (sock !== fh) return; S.fh.state = "off"; clearTimeout(fhTimer); fhTimer = setTimeout(fhConnect, fhDelay); fhDelay = Math.min(fhDelay * 2, 30000); };
     sock.onerror = () => { try { sock.close(); } catch (e) { /* ignore */ } };
   }
+  /** تحديث تلقائي للصفحة: إذا نُشرت نسخة أحدث نعيد التحميل بدل أن تبقى على نسخة قديمة مخزّنة في المتصفح. */
+  let updBusy = false;
+  async function checkUpdate() {
+    if (updBusy || typeof location === "undefined" || !/^https?:$/.test(location.protocol) || typeof fetch === "undefined") return;
+    updBusy = true;
+    try {
+      const r = await fetch(location.pathname + "?_=" + Date.now(), { cache: "no-store" }); if (!r.ok) return;
+      const m = /id="ver">([^<]*)</.exec(await r.text()), cur = $("#ver");
+      if (!m || !cur || m[1].trim() === cur.textContent.trim()) return;
+      const el = document.activeElement;
+      if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA")) return;
+      let done = ""; try { done = sessionStorage.getItem("ft_upd") || ""; } catch (e) { /* ignore */ }
+      if (done === m[1]) return;
+      try { sessionStorage.setItem("ft_upd", m[1]); } catch (e) { /* ignore */ }
+      const b = document.createElement("div"); b.className = "upd"; b.textContent = "نسخة جديدة متوفرة · جارٍ التحديث…"; document.body.appendChild(b);
+      setTimeout(() => location.reload(), 1200);
+    } catch (e) { /* بلا شبكة: نتجاهل */ } finally { updBusy = false; }
+  }
   function wsSync() {
     fhSync();
     if (!ws || ws.readyState !== 1 || S.ws.state !== "live") return;
@@ -2093,11 +2111,12 @@ if (typeof module !== "undefined") module.exports = Chart;
     $("#gear").onclick = settings;
     setInterval(() => { renderStatus(); if (S.tab === "alerts") alertsUI($("#body")); if (S.tab === "analysis") updateHead(); }, 3000);
     setInterval(wsSync, 5000);
+    setTimeout(checkUpdate, 3000); setInterval(checkUpdate, 60000); document.addEventListener("visibilitychange", () => { if (!document.hidden) checkUpdate(); });
     let lt = 0; setInterval(() => liveTick(lt++), 1000);
     setInterval(() => { const lq = $("#lq"); if (lq && S.open && S.tab === "analysis") lq.innerHTML = liveStrip(S.open); }, 1000);
     start();
   }
-  window.FT = { get CH() { return CH; }, offHours, S, API, init, detectAlerts, staleness, passFilters, mergeBars, pushAlert, buyPressure, onFhTrade, liveTick, liveBtn, candleFeed, onQuote, liveStrip, formingBar, onTrade };
+  window.FT = { get CH() { return CH; }, offHours, S, API, init, detectAlerts, staleness, passFilters, mergeBars, pushAlert, buyPressure, checkUpdate, onFhTrade, liveTick, liveBtn, candleFeed, onQuote, liveStrip, formingBar, onTrade };
   window.FT.surge3 = surge3;
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init); else init();
 })();
