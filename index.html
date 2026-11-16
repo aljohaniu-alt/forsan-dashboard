@@ -1157,7 +1157,7 @@ if (typeof module !== "undefined") module.exports = Chart;
     watch: Store.get("watch", ["SPY", "QQQ", "IWM"]),
     filters: Store.get("filters", { minPrice: 0.3, maxPrice: 20, minPct: 0, minRvol: 0, minVol: 0, minAvgVol: 0, minDollar: 0, minAtr: 0, maxAtr: 100, minCap: 0 }),
     cfgAlerts: Store.get("cfgAlerts", { sound: false, rsiLow: 30, rsiHigh: 70, rvolSpike: 3, volSurge: 5 }),
-    bars1m: {}, daily: {}, trade: {}, quote: {}, live: {}, snap: {}, mcap: {}, alerts: [], seen: {}, prev: {}, analysis: {},
+    fh: { state: "off" }, bars1m: {}, daily: {}, trade: {}, quote: {}, live: {}, snap: {}, mcap: {}, alerts: [], seen: {}, prev: {}, analysis: {},
     ws: { state: "off", ticks: 0, lastMsg: 0, lastTrade: 0, lag: null }, rtt: null, skew: 0, tab: "overview", open: null, tf: "5Min",
   };
   const now = () => Date.now() + S.skew;
@@ -1292,6 +1292,7 @@ if (typeof module !== "undefined") module.exports = Chart;
       return;
     }
     S.ws.blocked = null;
+    if (!fh) fhConnect();
     if (ws) { const old = ws; old.onclose = old.onmessage = old.onerror = null; try { old.close(); } catch (e) { /* ignore */ } }
     S.ws.state = "connecting"; renderStatus();
     const sock = ws = new WebSocket("wss://stream.data.alpaca.markets/v2/iex");
@@ -1313,7 +1314,47 @@ if (typeof module !== "undefined") module.exports = Chart;
     sock.onclose = () => { if (sock !== ws) return; S.ws.state = S.ws.blocked ? "blocked" : "off"; renderStatus(); if (S.ws.blocked) return; clearTimeout(wsTimer); wsTimer = setTimeout(wsConnect, wsDelay); wsDelay = Math.min(wsDelay * 2, 30000); };
     sock.onerror = () => { try { sock.close(); } catch (e) { /* ignore */ } };
   }
+  // ---------------- مصدر سعر ثانٍ: Finnhub (صفقات أمريكية لحظية مجانًا، حتى 50 رمزًا)
+  let fh = null, fhSubs = new Set(), fhTimer = 0, fhDelay = 1000;
+  function onFhTrade(x) {
+    const sym = x.s, p = Number(x.p), t = Number(x.t), sz = Number(x.v) || 0;
+    if (!sym || !(p > 0) || !(t > 0)) return;
+    const cur = S.trade[sym];
+    if (cur && cur.t > t) return;                     // لا نرجع للوراء
+    S.fh.n = (S.fh.n || 0) + 1; S.fh.last = Date.now();
+    S.trade[sym] = { p, s: sz, t, src: "fh" };
+    const q = C.nyParts(t);
+    if (q.m >= 570 && q.m <= 959) {
+      const k = Math.floor(t / 60000), L = S.live[sym];
+      if (!L || L.k !== k) S.live[sym] = { k, o: p, h: p, l: p, c: p, v: 0 };
+      else { L.h = Math.max(L.h, p); L.l = Math.min(L.l, p); L.c = p; }
+    }
+    if (sym === S.open && S.tab === "analysis") chartLive(); else throttle("ui", 400, renderLive);
+  }
+  function fhSync() {
+    if (!fh || fh.readyState !== 1) return;
+    const want = new Set(wantSyms().slice(0, 50));
+    for (const s of want) if (!fhSubs.has(s)) fh.send(JSON.stringify({ type: "subscribe", symbol: s }));
+    for (const s of fhSubs) if (!want.has(s)) fh.send(JSON.stringify({ type: "unsubscribe", symbol: s }));
+    fhSubs = want;
+  }
+  function fhConnect() {
+    if (!S.finnhub || typeof WebSocket === "undefined") return;
+    if (fh) { const old = fh; old.onclose = old.onmessage = old.onerror = null; try { old.close(); } catch (e) { /* ignore */ } }
+    S.fh.state = "connecting";
+    const sock = fh = new WebSocket("wss://ws.finnhub.io?token=" + encodeURIComponent(S.finnhub));
+    sock.onopen = () => { S.fh.state = "live"; fhDelay = 1000; fhSubs = new Set(); fhSync(); };
+    sock.onmessage = (ev) => {
+      if (sock !== fh) return;
+      let m; try { m = JSON.parse(ev.data); } catch (e) { return; }
+      if (m.type === "trade" && Array.isArray(m.data)) for (const x of m.data) onFhTrade(x);
+      else if (m.type === "error") S.fh.err = String(m.msg || "error");
+    };
+    sock.onclose = () => { if (sock !== fh) return; S.fh.state = "off"; clearTimeout(fhTimer); fhTimer = setTimeout(fhConnect, fhDelay); fhDelay = Math.min(fhDelay * 2, 30000); };
+    sock.onerror = () => { try { sock.close(); } catch (e) { /* ignore */ } };
+  }
   function wsSync() {
+    fhSync();
     if (!ws || ws.readyState !== 1 || S.ws.state !== "live") return;
     const want = new Set(wantSyms());
     const add = [...want].filter((s) => !subs.has(s)), del = [...subs].filter((s) => !want.has(s));
@@ -1327,7 +1368,7 @@ if (typeof module !== "undefined") module.exports = Chart;
     S.ws.lastTrade = t;
     const lag = Math.max(0, (now() - t) / 1000);
     S.ws.lag = S.ws.lag === null ? lag : S.ws.lag * 0.8 + lag * 0.2;
-    S.trade[m.S] = { p: m.p, s: m.s, t };
+    if (!S.trade[m.S] || S.trade[m.S].t <= t) S.trade[m.S] = { p: m.p, s: m.s, t };
     const q = C.nyParts(t);
     if (q.m >= 570 && q.m <= 959) {
       const k = Math.floor(t / 60000), L = S.live[m.S];
@@ -1341,7 +1382,7 @@ if (typeof module !== "undefined") module.exports = Chart;
     if (!(m.bp > 0) && !(m.ap > 0)) return;
     S.quote[m.S] = { b: m.bp, a: m.ap, bs: m.bs, as: m.as, t: Date.parse(m.t) };
     S.ws.lastMsg = now();
-    if (m.S === S.open && S.tab === "analysis") chartLive(); else throttle("ui", 400, renderLive);
+    if (m.S === S.open && S.tab === "analysis") chartLive();
   }
   function liveStrip(sym) {
     const tr = S.trade[sym], q = S.quote[sym], age = (t) => { const s = Math.max(0, Math.round((now() - t) / 1000)); return s < 60 ? `${s}ث` : `${Math.round(s / 60)}د`; };
@@ -1350,7 +1391,7 @@ if (typeof module !== "undefined") module.exports = Chart;
       + `<span class="up">شراء <b><bdi dir="ltr">${qOk && q.b ? num(q.b) : "—"}</bdi></b>${qOk && q.bs ? ` <small>×${q.bs}</small>` : ""}</span>`
       + `<span class="dn">بيع <b><bdi dir="ltr">${qOk && q.a ? num(q.a) : "—"}</bdi></b>${qOk && q.as ? ` <small>×${q.as}</small>` : ""}</span>`
       + `<span>الفارق <b><bdi dir="ltr">${qOk && q.a && q.b ? num(q.a - q.b) : "—"}</bdi></b></span></div>`
-      + `<div class="note">تشخيص البث: حالة <bdi dir="ltr">${esc(S.ws.state)}</bdi> · وصل صفقات <bdi dir="ltr">${S.ws.nt || 0}</bdi> · عروض <bdi dir="ltr">${S.ws.nq || 0}</bdi> · شموع <bdi dir="ltr">${S.ws.nb || 0}</bdi> · اشتراك: ${S.ws.sub ? `<bdi dir="ltr">${S.ws.sub.t}/${S.ws.sub.q}/${S.ws.sub.b}</bdi> (${esc(S.ws.sub.list)})` : "لم يصل تأكيد"}${S.ws.errMsg ? ` · خطأ: <bdi dir="ltr">${esc(S.ws.errMsg)}</bdi>` : ""} · آخر رسالة قبل <bdi dir="ltr">${S.ws.lastMsg ? Math.round((now() - S.ws.lastMsg) / 1000) : "—"}</bdi>ث · الرمز المفتوح <bdi dir="ltr">${esc(sym)}</bdi></div>`;
+      + `<div class="note">تشخيص البث: حالة <bdi dir="ltr">${esc(S.ws.state)}</bdi> · وصل صفقات <bdi dir="ltr">${S.ws.nt || 0}</bdi> · عروض <bdi dir="ltr">${S.ws.nq || 0}</bdi> · شموع <bdi dir="ltr">${S.ws.nb || 0}</bdi> · اشتراك: ${S.ws.sub ? `<bdi dir="ltr">${S.ws.sub.t}/${S.ws.sub.q}/${S.ws.sub.b}</bdi> (${esc(S.ws.sub.list)})` : "لم يصل تأكيد"}${S.ws.errMsg ? ` · خطأ: <bdi dir="ltr">${esc(S.ws.errMsg)}</bdi>` : ""} · آخر رسالة قبل <bdi dir="ltr">${S.ws.lastMsg ? Math.round((now() - S.ws.lastMsg) / 1000) : "—"}</bdi>ث · الرمز المفتوح <bdi dir="ltr">${esc(sym)}</bdi> · Finnhub: <bdi dir="ltr">${S.finnhub ? esc(S.fh.state) + " · " + (S.fh.n || 0) : "بدون مفتاح"}</bdi>${S.fh.err ? ` (${esc(S.fh.err)})` : ""}${tr && tr.src === "fh" ? " · مصدر آخر سعر: Finnhub" : ""}</div>`;
   }
   function onBar(m) {
     const b = C.toBar({ t: m.t, o: m.o, h: m.h, l: m.l, c: m.c, v: m.v });
@@ -1655,7 +1696,7 @@ if (typeof module !== "undefined") module.exports = Chart;
     const idx = ["SPY", "QQQ", "IWM"], mk = marketState();
     el.innerHTML = `<div class="cards">${idx.map((s) => {
       const A = S.analysis[s], r = A && A.results["5Min"], c = chgPct(s);
-      return `<div class="card" data-open="${s}"><b>${s}</b><div class="big ${cls(c)}">${num(livePx(s))}</div><div class="${cls(c)}">${pct(c)}</div><div>${r ? scoreBadge(r.score, r.category) + " " + esc(r.category.split(" (")[0]) : "جارٍ التحميل…"}</div></div>`;
+      return `<div class="card" data-open="${s}"><b>${s}</b><div class="big ${cls(c)}">${num(lastPrice(s))}</div><div class="${cls(c)}">${pct(c)}</div><div>${r ? scoreBadge(r.score, r.category) + " " + esc(r.category.split(" (")[0]) : "جارٍ التحميل…"}</div></div>`;
     }).join("")}</div><div class="card wide"><b>حالة السوق الأمريكي</b><div>${mk.label} · توقيت نيويورك ${new Date(now()).toLocaleTimeString("en-US", { timeZone: "America/New_York" })}</div></div>
       <p class="note">${esc(C.DISC)}</p>`;
     idx.forEach((s) => { if (!S.bars1m[s]) loadSymbol(s).catch(() => {}); });
@@ -1668,7 +1709,7 @@ if (typeof module !== "undefined") module.exports = Chart;
   }
   function renderWatchList() {
     const el = $("#wlist"); if (!el) return;
-    const rows = S.watch.map((s) => { const A = S.analysis[s], r = A && A.results["5Min"]; return { sym: s, price: livePx(s), chg: chgPct(s), score: r ? r.score : null, cat: r ? r.category : null, rvol: r ? r.facts.rvol : null, n: S.alerts.filter((a) => a.sym === s).length }; });
+    const rows = S.watch.map((s) => { const A = S.analysis[s], r = A && A.results["5Min"]; return { sym: s, price: lastPrice(s), chg: chgPct(s), score: r ? r.score : null, cat: r ? r.category : null, rvol: r ? r.facts.rvol : null, n: S.alerts.filter((a) => a.sym === s).length }; });
     el.innerHTML = table([...COLS.base, ["الدرجة", (r) => scoreBadge(r.score, r.cat)], ["RVOL", (r) => (r.rvol ? r.rvol.toFixed(1) + "×" : "—")], ["تنبيهات", (r) => r.n || ""], ["", (r) => `<a class="rm" data-rm="${r.sym}">حذف</a>`]], rows, "القائمة فارغة.");
     $$("[data-rm]").forEach((a) => (a.onclick = () => { S.watch = S.watch.filter((x) => x !== a.dataset.rm); Store.set("watch", S.watch); wsSync(); render(); }));
     bindOpen();
@@ -1728,7 +1769,7 @@ if (typeof module !== "undefined") module.exports = Chart;
   function renderSide() {
     const el = $("#side"); if (!el || !CH || !S.open) return;
     const sn = CH.snapshot(); if (!sn) return;
-    const p = livePx(S.open), c = chgPct(S.open), A = S.analysis[S.open], lv = (A && A.levels) || {}, b = sn.b, up = b.c >= b.o;
+    const p = lastPrice(S.open), c = chgPct(S.open), A = S.analysis[S.open], lv = (A && A.levels) || {}, b = sn.b, up = b.c >= b.o;
     const row = (k, v, cl) => `<div class="r"><span>${k}</span><b class="${cl || ""}">${v === null || v === undefined || (typeof v === "number" && Number.isNaN(v)) ? "—" : typeof v === "number" ? num(v) : v}</b></div>`;
     const vol = b.v >= 1e6 ? (b.v / 1e6).toFixed(2) + "M" : b.v >= 1e3 ? (b.v / 1e3).toFixed(1) + "K" : String(b.v);
     const lag = S.ws.lag;
@@ -1782,23 +1823,10 @@ if (typeof module !== "undefined") module.exports = Chart;
     b.className = "livebtn" + (S.liveMode ? " on" : ""); b.textContent = S.liveMode ? "● مباشر" : "○ متوقف";
   }
   let tailBusy = false;
-  async function refreshTails(syms) {
-    const list = syms.filter((s) => S.bars1m[s] && S.bars1m[s].length);
-    if (!list.length) return;
-    const since = Math.min(...list.map((s) => S.bars1m[s][S.bars1m[s].length - 1].t)) - 60000;
-    const j = await API.bars(list, "1Min", new Date(since).toISOString());
-    for (const s of list) { S.bars1m[s] = mergeBars(S.bars1m[s], (j[s] || []).map(C.toBar)); refresh(s); }
-  }
   function liveTick(n) {
-    if (!S.liveMode) return;
-    const open = marketState().open, el = typeof document !== "undefined" ? document.activeElement : null, typing = el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA");
-    if (S.tab === "analysis" && S.open && CH) {
-      chartLive();
-      if (n % 8 === 0 && open && !tailBusy) { tailBusy = true; refreshTail(S.open).catch(() => {}).finally(() => { tailBusy = false; }); }
-    } else if ((S.tab === "overview" || S.tab === "watch") && !typing) {
-      renderLive();
-      if (n % 8 === 0 && open && !tailBusy) { tailBusy = true; refreshTails(S.watch.slice(0, 12)).catch(() => {}).finally(() => { tailBusy = false; }); }
-    }
+    if (!S.liveMode || S.tab !== "analysis" || !S.open || !CH) return;
+    chartLive();
+    if (n % 8 === 0 && marketState().open && !tailBusy) { tailBusy = true; refreshTail(S.open).catch(() => {}).finally(() => { tailBusy = false; }); }
   }
   function renderAnalysisBox() {
     const box = $("#abox"); if (!box || !S.open) return;
@@ -1844,7 +1872,7 @@ if (typeof module !== "undefined") module.exports = Chart;
   /** شموع أقل من 30: نعرض الشارت فقط، بلا درجة ولا قراءة (لا نخترع تحليلًا من بيانات قليلة). */
   function fillLimited(A, frame) {
     lastR = null;
-    const p = livePx(S.open), c = chgPct(S.open);
+    const p = lastPrice(S.open), c = chgPct(S.open);
     $("#ahead").className = "head"; $("#ahead").innerHTML = `<div><b class="big2">${esc(S.open)}</b> <span id="hp" class="big2 ${cls(c)}">${num(p)}</span> <span id="hc" class="${cls(c)}">${pct(c)}</span></div><div id="ho" class="note">${offHoursHtml(S.open)}</div>`;
     $("#adyn").innerHTML = `<div class="warnbox"><b>⚠ بيانات قليلة: ${frame.length} شمعة مكتملة فقط في إطار ${esc(S.tf)}</b><p class="note" style="margin:6px 0">السهم قليل التداول على IEX (يظهر هذا في الوارنت والأسهم الضعيفة السيولة)، لذلك لا يمكن حساب الدرجة والقراءة (يلزم 30 شمعة مكتملة على الأقل). الشارت يعرض الشموع المتوفرة فقط. جرّب إطارًا أكبر مثل 15د أو يومي.</p></div>
       <p class="note">البيانات: <span id="fresh">${esc(freshText())}</span> · المصدر IEX · حجم جزئي</p><p class="note">${esc(C.DISC)}</p>`;
@@ -1908,7 +1936,7 @@ if (typeof module !== "undefined") module.exports = Chart;
   function fillDynamic(A, r) {
     const meta = { fresh: freshText() };
     const R = C.report(S.open, A.results, S.tf, A.frames[S.tf], A.levels, meta); lastR = R;
-    const F = R.facts, p = livePx(S.open), c = chgPct(S.open);
+    const F = R.facts, p = lastPrice(S.open), c = chgPct(S.open);
     const li = (a) => (a.length ? a.map((x) => `<li>${esc(x)}</li>`).join("") : "<li>—</li>");
     $("#ahead").className = "plain"; $("#ahead").innerHTML = simpleCard(A, R, p, c) + flowCard(S.open);
     $("#adyn").innerHTML = `<h3>الحقائق (من البيانات)</h3>
@@ -1965,7 +1993,7 @@ if (typeof module !== "undefined") module.exports = Chart;
     setInterval(() => { const lq = $("#lq"); if (lq && S.open && S.tab === "analysis") lq.innerHTML = liveStrip(S.open); }, 1000);
     start();
   }
-  window.FT = { get CH() { return CH; }, offHours, S, API, init, detectAlerts, staleness, passFilters, mergeBars, pushAlert, buyPressure, liveTick, liveBtn, candleFeed, onQuote, liveStrip, formingBar, onTrade };
+  window.FT = { get CH() { return CH; }, offHours, S, API, init, detectAlerts, staleness, passFilters, mergeBars, pushAlert, buyPressure, onFhTrade, liveTick, liveBtn, candleFeed, onQuote, liveStrip, formingBar, onTrade };
   window.FT.surge3 = surge3;
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init); else init();
 })();
