@@ -135,7 +135,7 @@ details.dg{border:0;margin:2px 0 0;padding:0}details.dg>summary{color:var(--mut)
 </style>
 </head>
 <body>
-<header><div class="top"><div class="brand"><div class="logo"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 17l5-6 4 3 7-9" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><circle cx="20" cy="5" r="2" fill="#fff"/></svg></div><div><h1>لوحة السوق</h1><small>قراءة فنية فقط · القرار قرارك · نسخة <bdi dir="ltr" id="ver">11-16 23:42 · c5771c7</bdi></small></div></div><button id="gear" aria-label="الإعدادات">⚙</button></div><div id="status"></div></header>
+<header><div class="top"><div class="brand"><div class="logo"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 17l5-6 4 3 7-9" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><circle cx="20" cy="5" r="2" fill="#fff"/></svg></div><div><h1>لوحة السوق</h1><small>قراءة فنية فقط · القرار قرارك · نسخة <bdi dir="ltr" id="ver">11-16 23:45 · 7ce46b1</bdi></small></div></div><button id="gear" aria-label="الإعدادات">⚙</button></div><div id="status"></div></header>
 <nav id="tabs"></nav>
 <main id="body"></main>
 <div id="settings" hidden></div>
@@ -1536,8 +1536,8 @@ if (typeof module !== "undefined") module.exports = Chart;
     fetch("https://ntfy.sh/", { method: "POST", body: JSON.stringify({ topic: S.ntfy, title: `${a.sym}: ${a.indicator}`, message: body, priority: 4 }) }).catch(() => {});
   }
   /** يقارن الحالة الحالية بالسابقة ولا يرسل إلا عند التحول (لا تكرار لنفس الحالة). */
-  /** قوة شراء على مؤشر الدقيقة: آخر 3 شموع (دقيقة) دخولها ≥ 65% من حجمها، والتراكمي اليوم موجب، والسعر فوق VWAP. وصف لحالة السيولة وليس توصية. */
-  const BP_N = 3, BP_PCT = 65;
+  /** قوة شراء على مؤشر الدقيقة: آخر 3 شموع (دقيقة) صافي دخولها ≥ 30% من حجمها، والتراكمي اليوم موجب، والسعر فوق VWAP. وصف لحالة السيولة وليس توصية. */
+  const BP_N = 3, BP_NET = 30;   // صافي الدخول (أو الخروج) ≥ 30% من حجم آخر 3 دقائق
   function buyPressure(A, aboveVwap) {
     const t = A.bars1m.filter((b) => C.isReg(b)); if (!t.length) return null;
     const day = t[t.length - 1].d, td = t.filter((b) => b.d === day), w = td.slice(-BP_N);
@@ -1546,16 +1546,18 @@ if (typeof module !== "undefined") module.exports = Chart;
     const vol = w.reduce((s, b) => s + b.v, 0), net = wf.cum[wf.cum.length - 1];
     if (!vol) return null;
     const pct = (net / vol + 1) / 2 * 100, cum = fs.cum[fs.cum.length - 1];
-    return { on: pct >= BP_PCT && cum > 0 && aboveVwap === true, pct, net, cum };
+    const netPct = net / vol * 100;
+    return { on: netPct >= BP_NET && cum > 0 && aboveVwap === true, pct, netPct, net, cum };
   }
-  /** قوة بيع / انقلاب السيولة: آخر 3 شموع دقيقة خروجها ≥ 65% من حجمها. إذا كانت سيولة اليوم موجبة فهو انقلاب. */
+  /** قوة بيع / انقلاب السيولة: آخر 3 شموع دقيقة صافي خروجها ≥ 30% من حجمها. إذا كانت سيولة اليوم موجبة فهو انقلاب. */
   function sellPressure(A) {
     const t = A.bars1m.filter((b) => C.isReg(b)); if (!t.length) return null;
     const day = t[t.length - 1].d, td = t.filter((b) => b.d === day), w = td.slice(-BP_N);
     if (td.length < 20 || w.length < BP_N) return null;
     const vol = w.reduce((s, b) => s + b.v, 0); if (!vol) return null;
     const net = C.flowSeries(w, false).cum[BP_N - 1], cum = C.flowSeries(td, false).cum[td.length - 1], sell = (1 - net / vol) / 2 * 100;
-    return { on: sell >= BP_PCT, sell, cum, reversal: cum > 0 };
+    const netPct = -net / vol * 100;
+    return { on: netPct >= BP_NET, sell, netPct, cum, reversal: cum > 0 };
   }
   /** تجمّع قبل الاختراق: تضيّق ملحوظ في مدى شموع 5 دقائق + السعر قريب تحت مقاومة + الحجم لا ينخفض. */
   function squeezeState(frame, levels, price, atr) {
@@ -1594,8 +1596,8 @@ if (typeof module !== "undefined") module.exports = Chart;
     const first = !S.prev[sym];
     const flip = (k) => !first && P[k] !== null && P[k] !== undefined && cur[k] !== null && cur[k] !== P[k];
     if (flip("aboveVwap")) pushAlert(sym, "vwap", "5Min", "VWAP", cur.aboveVwap ? "السعر استعاد VWAP وأغلق فوقه" : "السعر فقد VWAP وأغلق تحته (ضغط بيعي محتمل)", tfT, p);
-    if (flip("buyP") && cur.buyP) pushAlert(sym, "flow", "1Min", "قوة شراء", `ظهرت قوة شراء على الدقيقة: دخول ${bp.pct.toFixed(0)}% من حجم آخر ${BP_N} دقائق، والسيولة التراكمية اليوم موجبة، والسعر فوق VWAP`, r1 ? r1.last.t : tfT, p);
-    if (flip("sellP") && cur.sellP) pushAlert(sym, "flow", "1Min", sp.reversal ? "انقلاب السيولة" : "قوة بيع", sp.reversal ? `انقلاب السيولة: كان الدخول متفوقًا اليوم لكن آخر ${BP_N} دقائق خروج ${sp.sell.toFixed(0)}% من حجمها` : `ظهرت قوة بيع على الدقيقة: خروج ${sp.sell.toFixed(0)}% من حجم آخر ${BP_N} دقائق`, r1 ? r1.last.t : tfT, p);
+    if (flip("buyP") && cur.buyP) pushAlert(sym, "flow", "1Min", "قوة شراء", `ظهرت قوة شراء على الدقيقة: صافي الدخول +${bp.netPct.toFixed(0)}% من حجم آخر ${BP_N} دقائق، والسيولة التراكمية اليوم موجبة، والسعر فوق VWAP`, r1 ? r1.last.t : tfT, p);
+    if (flip("sellP") && cur.sellP) pushAlert(sym, "flow", "1Min", sp.reversal ? "انقلاب السيولة" : "قوة بيع", sp.reversal ? `انقلاب السيولة: كان الدخول متفوقًا اليوم لكن آخر ${BP_N} دقائق صافي الخروج ${sp.netPct.toFixed(0)}% من حجمها` : `ظهرت قوة بيع على الدقيقة: صافي الخروج ${sp.netPct.toFixed(0)}% من حجم آخر ${BP_N} دقائق`, r1 ? r1.last.t : tfT, p);
     if (flip("squeeze") && cur.squeeze) pushAlert(sym, "squeeze", "5Min", "تجمّع قبل الاختراق", `تضيّق في مدى الشموع (${(sq.ratio * 100).toFixed(0)}% من المعتاد) والسعر قريب تحت مقاومة ${num(sq.res)} والحجم لا ينخفض. لم يحدث اختراق بعد`, tfT, p);
     if (flip("e9over20")) pushAlert(sym, "ema", "5Min", "EMA9/EMA20", cur.e9over20 ? "EMA9 تقاطع صعودًا فوق EMA20" : "EMA9 تقاطع هبوطًا تحت EMA20", tfT, p);
     if (flip("macdPos")) pushAlert(sym, "macd", "5Min", "MACD", cur.macdPos ? "تقاطع MACD إيجابي: تحسن الزخم" : "تقاطع MACD سلبي: ضعف الزخم", tfT, p);
