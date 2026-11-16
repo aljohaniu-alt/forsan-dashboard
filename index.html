@@ -339,14 +339,16 @@ const Core = (function () {
     const reg = t.filter(isReg), pm = t.filter((b) => b.m >= 240 && b.m < REG0);
     const mx = (a) => Math.max(...a.map((b) => b.h)), mn = (a) => Math.min(...a.map((b) => b.l));
     if (reg.length) {
-      out.HOD = mx(reg); out.LOD = mn(reg);
+      out.HOD = mx(reg); out.LOD = mn(reg); out.OPEN = reg[0].o;
       const orr = reg.filter((b) => b.m <= 584);
       if (orr.length) { out.OR_high = mx(orr); out.OR_low = mn(orr); }
     }
     if (pm.length) { out.PM_high = mx(pm); out.PM_low = mn(pm); }
     if (days.length > 1) {
       const pr = bars1m.filter((b) => b.d === days[days.length - 2] && isReg(b));
-      if (pr.length) { out.PDH = mx(pr); out.PDL = mn(pr); }
+      if (pr.length) { out.PDH = mx(pr); out.PDL = mn(pr); out.PDC = pr[pr.length - 1].c; }
+      const ah = bars1m.filter((b) => b.d === days[days.length - 2] && b.m >= 960);
+      if (ah.length) out.AHC = ah[ah.length - 1].c;
     }
     return out;
   }
@@ -431,7 +433,7 @@ const Core = (function () {
     const base = hi.length ? last(hi)[1] : Math.max(...bars.slice(-10).map((b) => b.h));
     return { px: base + 0.1 * atrv, text: `فوق ${fx(base + 0.1 * atrv)} (آخر قمة مؤكدة)` };
   }
-  const LV_NAMES = { HOD: "أعلى اليوم", LOD: "أدنى اليوم", PDH: "أعلى أمس", PDL: "أدنى أمس", PM_high: "أعلى ما قبل السوق", PM_low: "أدنى ما قبل السوق", OR_high: "أعلى النطاق الافتتاحي", OR_low: "أدنى النطاق الافتتاحي" };
+  const LV_NAMES = { HOD: "أعلى اليوم", LOD: "أدنى اليوم", PDH: "أعلى أمس", PDL: "أدنى أمس", PM_high: "أعلى ما قبل السوق", PM_low: "أدنى ما قبل السوق", OR_high: "أعلى النطاق الافتتاحي", OR_low: "أدنى النطاق الافتتاحي", OPEN: "سعر افتتاح اليوم", PDC: "إغلاق أمس", AHC: "إغلاق ما بعد السوق أمس" };
   /** يبني تقريرًا منظمًا: حقائق منفصلة عن التفسير. */
   function report(sym, results, baseTf, baseBars, lv, meta) {
     const r = results[baseTf], F = r.facts;
@@ -490,7 +492,7 @@ const Chart = (function () {
   const C = typeof Core !== "undefined" ? Core : require("./core.js");
   const isn = (x) => x === null || x === undefined || Number.isNaN(x);
   const COL = { bg: "#0b1220", grid: "#152133", axis: "#8397ad", text: "#d5deea", up: "#26a69a", dn: "#ef5350", mid: "#f6c344", ema9: "#f6c344", ema20: "#42a5f5", ema50: "#ab47bc", sma200: "#ff9800", vwap: "#f1f5f9" };
-  const LV = { HOD: ["HOD", "#26a69a"], LOD: ["LOD", "#ef5350"], PDH: ["PDH", "#90a4ae"], PDL: ["PDL", "#90a4ae"], PM_high: ["PMH", "#b39ddb"], PM_low: ["PML", "#b39ddb"], OR_high: ["ORH", "#4dd0e1"], OR_low: ["ORL", "#4dd0e1"] };
+  const LV = { HOD: ["HOD", "#26a69a"], LOD: ["LOD", "#ef5350"], PDH: ["PDH", "#90a4ae"], PDL: ["PDL", "#90a4ae"], PM_high: ["PMH", "#b39ddb"], PM_low: ["PML", "#b39ddb"], OR_high: ["ORH", "#4dd0e1"], OR_low: ["ORL", "#4dd0e1"], OPEN: ["افتتاح", "#4fc3f7"], PDC: ["إغلاق أمس", "#ffb74d"], AHC: ["بعد الإغلاق", "#ba68c8"] };
   const px = (x) => (isn(x) ? "—" : Math.abs(x) < 1 ? x.toFixed(4) : x.toFixed(2));
   const hhmm = (m) => String(Math.floor(m / 60)).padStart(2, "0") + ":" + String(m % 60).padStart(2, "0");
   const sg = (x) => (x > 0 ? 1 : x < 0 ? -1 : 0);
@@ -558,7 +560,22 @@ const Chart = (function () {
       cand.sort((x, y) => y.touches - x.touches || Math.abs(x.p - price) - Math.abs(y.p - price));
       return { ...cand[0], half: 0.15 * a };
     };
-    return { res: pick(hi, (p) => p > price * 1.0005), sup: pick(lo, (p) => p < price * 0.9995), atr: a };
+    // مناطق طلب/عرض متعددة: قاع (قمة) مؤكد لم يُغلق السعر بعده خلفه. النطاق من الذيل إلى جسم الشمعة تقريبًا.
+    const off = bars.length - look.length, list = [];
+    const mk = (arr, dem) => {
+      const out = [];
+      for (const [i, p] of arr) {
+        const gi = off + i, after = bars.slice(gi + 1);
+        const zl = dem ? p - 0.1 * a : p - 0.5 * a, zh = dem ? p + 0.5 * a : p + 0.1 * a;
+        if (dem ? zh >= price : zl <= price) continue;
+        if (after.some((b) => (dem ? b.c < zl : b.c > zh))) continue;
+        if (out.some((z) => Math.abs(z.p - p) < 0.8 * a)) continue;
+        out.push({ p, lo: zl, hi: zh, i: gi, dem });
+      }
+      return out.sort((x, y) => Math.abs(x.p - price) - Math.abs(y.p - price)).slice(0, 3);
+    };
+    list.push(...mk(lo, true), ...mk(hi, false));
+    return { res: pick(hi, (p) => p > price * 1.0005), sup: pick(lo, (p) => p < price * 0.9995), atr: a, list };
   }
   const niceStep = (r) => { const e = Math.pow(10, Math.floor(Math.log10(r))), f = r / e; return (f < 1.5 ? 1 : f < 3.5 ? 2 : f < 7.5 ? 5 : 10) * e; };
 
@@ -585,6 +602,9 @@ const Chart = (function () {
   // ---------------------------------------------------------------- شرح العلامات (دوال نقية، وصف فقط وليس توصية)
   const NOTE = "وصف لحدث فني وقع فعلًا على شموع مكتملة. ليس توصية شراء أو بيع، والقرار قرارك.";
   const LVX = {
+    OPEN: ["سعر أول صفقة في الجلسة الرسمية اليوم", "مرجع مهم: السعر فوقه يعني أن المشترين ما زالوا ممسكين بالجلسة، وتحته يعني أن البائعين غلبوا منذ الافتتاح.", "يؤخذ من أول شمعة دقيقة بعد 4:30 مساءً بتوقيت السعودية."],
+    PDC: ["سعر إغلاق الجلسة الرسمية السابقة", "المرجع الذي تُحسب منه نسبة تغير اليوم. الفجوة بينه وبين الافتتاح تعكس أثر الأخبار والتداول خارج الدوام.", "آخر شمعة دقيقة في الجلسة الرسمية السابقة."],
+    AHC: ["آخر سعر تداول بعد إغلاق الجلسة السابقة", "يبين أين انتهى التداول المسائي. فجوة كبيرة بينه وبين الإغلاق الرسمي تعني حركة خبر أو اهتمام بعد السوق.", "آخر شمعة دقيقة بعد 4:00 مساءً نيويورك في اليوم السابق."],
     HOD: ["أعلى سعر وصله السهم اليوم", "مستوى يراقبه كثيرون كمقاومة. إغلاق فوقه يعني قمة جديدة لليوم، والارتداد منه يعني أن البائعين دافعوا عنه.", "يتغير فقط إذا صنع السعر قمة جديدة."],
     LOD: ["أدنى سعر وصله السهم اليوم", "مستوى يراقبه كثيرون كدعم. إغلاق تحته يعني قاعًا جديدًا لليوم، والارتداد منه يعني أن المشترين دافعوا عنه.", "يتغير فقط إذا صنع السعر قاعًا جديدًا."],
     PDH: ["أعلى سعر في الجلسة السابقة", "مستوى مرجعي: تجاوزه يعني أن السهم أقوى من أمس، وفشله عنده يعني أن أمس ما زال سقفًا.", "ثابت طوال اليوم."],
@@ -667,6 +687,14 @@ const Chart = (function () {
         return { title: h.key === "R" ? "منطقة مقاومة" : "منطقة دعم", tag: h.key === "R" ? "فوق السعر" : "تحت السعر", dir: 0, rows,
           meaning: h.key === "R" ? `منطقة ارتد منها السعر ${h.touches} مرات سابقًا من قمم مؤكدة. المنطقة المظللة أوسع من الخط لأن الدعم والمقاومة نطاق وليس سعرًا واحدًا.` : `منطقة ارتد منها السعر ${h.touches} مرات سابقًا من قيعان مؤكدة. المنطقة المظللة أوسع من الخط لأن الدعم والمقاومة نطاق وليس سعرًا واحدًا.`,
           how: "تُستخرج من قمم وقيعان مؤكدة (3 شموع على كل جانب) في آخر 120 شمعة، ويُختار المستوى الأكثر لمسًا.", watch: h.key === "R" ? "إغلاق شمعة فوق المنطقة يعني تجاوزها، والفشل عندها يعني أنها ما زالت سقفًا." : "إغلاق شمعة تحت المنطقة يعني كسرها، والثبات فوقها يعني أنها ما زالت أرضية.", caution: "كل لمسة جديدة قد تضعف المستوى بدل أن تقويه.", note: NOTE };
+      }
+      if (h.key === "DZ" || h.key === "SZ") {
+        const dem = h.key === "DZ", rows2 = [["النطاق", `${px(h.lo)} – ${px(h.hi)}`], ["السعر الآن", px(cur)], ["البعد عن السعر", fmtp(chg(h.price))]];
+        return { title: dem ? "منطقة طلب" : "منطقة عرض", tag: "منطقة", dir: 0, rows: rows2,
+          meaning: dem ? "منطقة نزل منها السعر سابقًا ثم ارتفع بعدها، وما أُغلقت شمعة تحتها منذ ذلك الوقت. يراقبها كثيرون كمكان قد يظهر فيه طلب مرة أخرى." : "منطقة صعد منها السعر سابقًا ثم تراجع، وما أُغلقت شمعة فوقها منذ ذلك الوقت. يراقبها كثيرون كمكان قد يظهر فيه عرض مرة أخرى.",
+          how: "تُستخرج من قاع (أو قمة) مؤكد بثلاث شموع على كل جانب، ويمتد نطاقها من الذيل إلى نحو نصف حركة الشمعة المعتادة (ATR). تُحذف عند إغلاق شمعة خلفها.",
+          watch: dem ? "ثبات السعر فوقها يبقيها قائمة، وإغلاق شمعة تحتها يلغيها." : "بقاء السعر تحتها يبقيها قائمة، وإغلاق شمعة فوقها يلغيها.",
+          caution: "المنطقة ليست أمر شراء أو بيع. قد تُكسر من أول لمسة، والقرار قرارك.", note: NOTE };
       }
       if (h.key === "INV") return { title: "مستوى إبطال القراءة (INV)", tag: "حد", dir: 0, rows, meaning: "المستوى الذي إذا أُغلق السعر خلفه تفقد القراءة الحالية أساسها: أسفل آخر قاع مؤكد إذا كانت القراءة إيجابية، وأعلى آخر قمة مؤكدة إذا كانت سلبية.", how: "آخر قاع/قمة مؤكدة ± جزء صغير من ATR (متوسط حركة الشمعة).", watch: "الحكم عند إغلاق شمعة خلفه وليس لمسة عابرة.", caution: "هذا حد لصلاحية القراءة وليس أمر وقف خسارة. موضع وقف الخسارة قرارك.", note: NOTE };
       const x = LVX[h.key] || [h.name, "", ""];
@@ -767,8 +795,18 @@ const Chart = (function () {
       }
       ctx.save(); ctx.beginPath(); ctx.rect(0, 0, plotW, H); ctx.clip();
 
-      // ----- مناطق الدعم والمقاومة
+      // ----- مناطق طلب/عرض (مظللة من نشأتها حتى حافة الشارت)
       const tags = [];
+      if (show.zones && Z && Z.list) {
+        Z.list.forEach((z, zi) => {
+          if (z.hi < lo || z.lo > hi) return;
+          const col = z.dem ? COL.up : COL.dn, x0 = Math.max(0, x(z.i) - cw / 2), yT = y(Math.min(hi, z.hi)), yB = y(Math.max(lo, z.lo));
+          ctx.fillStyle = col + "26"; ctx.fillRect(x0, yT, plotW - x0, Math.max(2, yB - yT));
+          ctx.strokeStyle = col + "99"; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(x0, yT); ctx.lineTo(plotW, yT); ctx.moveTo(x0, yB); ctx.lineTo(plotW, yB); ctx.stroke();
+          ctx.fillStyle = col; ctx.textAlign = "right"; ctx.fillText(z.dem ? "منطقة طلب" : "منطقة عرض", plotW - 6, yT + 9); ctx.textAlign = "left";
+          st.hits.push({ k: "lv", id: "z" + zi + (z.dem ? "d" : "s"), key: z.dem ? "DZ" : "SZ", name: z.dem ? "منطقة طلب" : "منطقة عرض", y: (yT + yB) / 2, price: z.p, lo: z.lo, hi: z.hi });
+        });
+      }
       if (show.zones && Z) {
         [[Z.res, "R", COL.dn], [Z.sup, "S", COL.up]].forEach(([z, nm, col]) => {
           if (!z) return;
