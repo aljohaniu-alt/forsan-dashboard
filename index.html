@@ -110,6 +110,28 @@ button:hover{border-color:#3a5b8c}button:active{transform:scale(.98)}
 :focus-visible{outline:2px solid var(--acc);outline-offset:2px}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 @media (max-width:480px){.cards{grid-template-columns:repeat(2,1fr);gap:10px}.card .big{font-size:23px}main{padding:12px 10px}.brand h1{font-size:16px}}
+
+/* ===== صفحة السهم المبسّطة ===== */
+.simple.sx{padding:12px 14px 10px;background:linear-gradient(180deg,#12203a,#0e192c);border:1px solid var(--line2)}
+.sh2{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.sid b{font-size:22px;font-weight:800;letter-spacing:.5px;display:block;line-height:1.1}.sid .note{margin:2px 0 0;font-size:12px}
+.spx{text-align:left;direction:ltr;display:flex;flex-direction:column;align-items:flex-end;line-height:1.1}.spx .big2{font-size:30px;font-weight:800}.spx .chg{font-size:14px;font-weight:700;margin-top:3px}
+.tiles{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:12px 0 4px}
+.tile{display:flex;flex-direction:column;gap:1px;padding:9px 11px;border-radius:12px;background:rgba(255,255,255,.035);border:1px solid var(--line);min-width:0}
+.tile small{color:var(--mut);font-size:11.5px;font-weight:700;letter-spacing:.3px}.tile b{font-size:16px;font-weight:800;line-height:1.35;overflow-wrap:anywhere}.tile span{color:var(--mut);font-size:12px}
+.tile.up b{color:var(--up)}.tile.dn b{color:var(--dn)}.tile.mid b{color:var(--mid)}.tile b.up{color:var(--up)}.tile b.dn{color:var(--dn)}.tile b.mid{color:var(--mid)}
+.simple.sx .wn{margin:6px 0 0;padding:6px 10px;font-size:12.5px;border-radius:10px}
+details.dt,details.dg{margin-top:8px;border-top:1px solid var(--line);padding-top:6px}
+details.dt>summary,details.dg>summary{cursor:pointer;color:#7fb2ff;font-size:13.5px;font-weight:700;list-style:none;padding:4px 0}details>summary::-webkit-details-marker{display:none}
+details.dt>summary::after,details.dg>summary::after{content:" ▾";color:var(--mut)}details[open]>summary::after{content:" ▴"}
+details.dt .tdesc{color:var(--mut);font-size:13px}details.dt .sl{font-size:14px;line-height:1.8;margin:6px 0}
+details.dg{border:0;margin:2px 0 0;padding:0}details.dg>summary{color:var(--mut);font-size:12px;font-weight:600}
+#lq .lstrip{flex-wrap:nowrap;overflow-x:auto;gap:14px;padding:7px 12px;font-size:13px;scrollbar-width:none;white-space:nowrap}#lq .lstrip::-webkit-scrollbar{display:none}
+#lq{margin:6px 0}
+#cfs:not(.adv) #azoom{display:none}
+.ctool{gap:8px;margin:8px 0}
+.tiphint{display:none}
+.sec{margin-top:10px}
 </style>
 </head>
 <body>
@@ -1430,7 +1452,7 @@ if (typeof module !== "undefined") module.exports = Chart;
       + `<span class="up">شراء <b><bdi dir="ltr">${qOk && q.b ? num(q.b) : "—"}</bdi></b>${qOk && q.bs ? ` <small>×${q.bs}</small>` : ""}</span>`
       + `<span class="dn">بيع <b><bdi dir="ltr">${qOk && q.a ? num(q.a) : "—"}</bdi></b>${qOk && q.as ? ` <small>×${q.as}</small>` : ""}</span>`
       + `<span>الفارق <b><bdi dir="ltr">${qOk && q.a && q.b ? num(q.a - q.b) : "—"}</bdi></b></span></div>`
-      + `<div class="note">تشخيص البث: حالة <bdi dir="ltr">${esc(S.ws.state)}</bdi> · وصل صفقات <bdi dir="ltr">${S.ws.nt || 0}</bdi> · عروض <bdi dir="ltr">${S.ws.nq || 0}</bdi> · شموع <bdi dir="ltr">${S.ws.nb || 0}</bdi> · اشتراك: ${S.ws.sub ? `<bdi dir="ltr">${S.ws.sub.t}/${S.ws.sub.q}/${S.ws.sub.b}</bdi> (${esc(S.ws.sub.list)})` : "لم يصل تأكيد"}${S.ws.errMsg ? ` · خطأ: <bdi dir="ltr">${esc(S.ws.errMsg)}</bdi>` : ""} · آخر رسالة قبل <bdi dir="ltr">${S.ws.lastMsg ? Math.round((now() - S.ws.lastMsg) / 1000) : "—"}</bdi>ث · الرمز المفتوح <bdi dir="ltr">${esc(sym)}</bdi> · Finnhub: <bdi dir="ltr">${S.finnhub ? esc(S.fh.state) + " · " + (S.fh.n || 0) : "بدون مفتاح"}</bdi>${S.fh.err ? ` (${esc(S.fh.err)})` : ""}${tr && tr.src === "fh" ? " · مصدر آخر سعر: Finnhub" : ""}</div>`;
+      + `<details class="dg"><summary>تشخيص البث</summary><div class="note">حالة <bdi dir="ltr">${esc(S.ws.state)}</bdi> · وصل صفقات <bdi dir="ltr">${S.ws.nt || 0}</bdi> · عروض <bdi dir="ltr">${S.ws.nq || 0}</bdi> · شموع <bdi dir="ltr">${S.ws.nb || 0}</bdi> · اشتراك: ${S.ws.sub ? `<bdi dir="ltr">${S.ws.sub.t}/${S.ws.sub.q}/${S.ws.sub.b}</bdi> (${esc(S.ws.sub.list)})` : "لم يصل تأكيد"}${S.ws.errMsg ? ` · خطأ: <bdi dir="ltr">${esc(S.ws.errMsg)}</bdi>` : ""} · آخر رسالة قبل <bdi dir="ltr">${S.ws.lastMsg ? Math.round((now() - S.ws.lastMsg) / 1000) : "—"}</bdi>ث · الرمز المفتوح <bdi dir="ltr">${esc(sym)}</bdi> · Finnhub: <bdi dir="ltr">${S.finnhub ? esc(S.fh.state) + " · " + (S.fh.n || 0) : "بدون مفتاح"}</bdi>${S.fh.err ? ` (${esc(S.fh.err)})` : ""}${tr && tr.src === "fh" ? " · مصدر آخر سعر: Finnhub" : ""}</div></details>`;
   }
   function onBar(m) {
     const b = C.toBar({ t: m.t, o: m.o, h: m.h, l: m.l, c: m.c, v: m.v });
@@ -1809,7 +1831,7 @@ if (typeof module !== "undefined") module.exports = Chart;
     CH.setData(d); updateHead(); renderSide();
     { const lq = $("#lq"); if (lq) lq.innerHTML = liveStrip(S.open); }
     throttle("cfeed", 1000, () => { const el = $("#cfeed"); if (el) el.innerHTML = candleFeed(S.open); });
-    throttle("flowc", 3000, () => { const el = $("#flowc"); if (el && S.mode !== "adv") el.outerHTML = flowCard(S.open); });
+    throttle("flowc", 3000, () => { const ft = $("#flowt"), fd = $("#flowd"); if (ft && S.mode !== "adv") { const fp = flowParts(S.open); ft.innerHTML = fp.tile; if (fd) fd.innerHTML = fp.detail; } });
   }
 
   /** تكبير الشارت لكامل الشاشة مع لوحة أرقام جانبية. */
@@ -1962,19 +1984,19 @@ if (typeof module !== "undefined") module.exports = Chart;
     }).join("");
     return `<div class="tw"><table><thead><tr><th>الوقت (الرياض)</th><th>الإغلاق</th><th>التغير</th><th>الحجم</th><th>الدخول</th></tr></thead><tbody>${rows}</tbody></table></div><p class="note">● الشمعة الجارية. «الدخول» تقدير من موضع الإغلاق داخل الشمعة وليس أوامر حقيقية.</p>`;
   }
-  function flowCard(sym) {
-    const A = S.analysis[sym]; if (!A) return "";
-    const m1 = liveM1(sym);
-    const f = C.flow(m1); if (!f) return "";
+  function flowParts(sym) {
+    const A = S.analysis[sym]; if (!A) return { tile: "", detail: "" };
+    const m1 = liveM1(sym), f = C.flow(m1); if (!f) return { tile: "", detail: "" };
     const K = (x) => { const a = Math.abs(x); return (x < 0 ? "-" : "") + (a >= 1e6 ? (a / 1e6).toFixed(2) + "M" : a >= 1e3 ? (a / 1e3).toFixed(1) + "K" : Math.round(a)); };
     const t = m1.filter((b) => b.d === f.day && C.isReg(b)), fs = C.flowSeries(t, false), n = t.length, k = Math.min(30, n - 1);
     const dP = k > 0 ? t[n - 1].c - t[n - 1 - k].c : 0, dF = k > 0 ? fs.cum[n - 1] - fs.cum[n - 1 - k] : 0;
     const tr = !k ? "" : dF > 0 && dP >= 0 ? "السعر والسيولة يصعدان معًا في آخر 30 دقيقة: الصعود مدعوم بدخول." : dF < 0 && dP <= 0 ? "السعر والسيولة ينزلان معًا في آخر 30 دقيقة: الهبوط مصحوب بخروج." : dF < 0 && dP > 0 ? "السعر يصعد لكن السيولة تنزل: الصعود بلا دعم واضح من الدخول." : dF > 0 && dP < 0 ? "السعر ينزل لكن السيولة تصعد: الهبوط يقابله دخول." : "";
-    const st = { in: ["دخول أكثر من خروج", "up"], out: ["خروج أكثر من دخول", "dn"], flat: ["متوازن", "mid"] }[f.state];
+    const st = { in: ["دخول أكثر", "up"], out: ["خروج أكثر", "dn"], flat: ["متوازن", "mid"] }[f.state];
     const l15 = f.last15 > 0 ? "دخول" : f.last15 < 0 ? "خروج" : "متوازن";
-    return `<div class="simple" id="flowc"><div class="lbl">قراءة مؤشر السيولة (الخط الأزرق أسفل الشارت)</div><div class="trend ${st[1]}"><span class="tword">${esc(st[0])}</span><span class="tdesc">نسبة الدخول <bdi dir="ltr">${f.buyPct.toFixed(0)}%</bdi> من حجم اليوم</span>
-      <ul class="sl"><li>دخول تقريبي: <bdi dir="ltr">${K(f.inV)}</bdi> سهم · خروج تقريبي: <bdi dir="ltr">${K(f.outV)}</bdi> سهم</li><li>الصافي: <bdi dir="ltr">${K(f.net)}</bdi> سهم · آخر 15 دقيقة: ${l15} (<bdi dir="ltr">${K(f.last15)}</bdi>)</li>${tr ? `<li>${esc(tr)}</li>` : ""}</ul>
-      <div class="note">تقدير من الشموع وبيانات IEX الجزئية، وليس أوامر حقيقية. وصف لما حدث وليس توصية. القرار قرارك.</div></div></div>`;
+    return {
+      tile: `<small>السيولة</small><b class="${st[1]}">${esc(st[0])}</b><span>دخول <bdi dir="ltr">${f.buyPct.toFixed(0)}%</bdi></span>`,
+      detail: `<div class="lbl">قراءة مؤشر السيولة (الخط الأزرق أسفل الشارت)</div><ul class="sl"><li>دخول تقريبي: <bdi dir="ltr">${K(f.inV)}</bdi> سهم · خروج تقريبي: <bdi dir="ltr">${K(f.outV)}</bdi> سهم</li><li>الصافي: <bdi dir="ltr">${K(f.net)}</bdi> سهم · آخر 15 دقيقة: ${l15} (<bdi dir="ltr">${K(f.last15)}</bdi>)</li>${tr ? `<li>${esc(tr)}</li>` : ""}</ul><div class="note">تقدير من الشموع وبيانات IEX الجزئية، وليس أوامر حقيقية.</div>`,
+    };
   }
   function simpleCard(A, R, p, c) {
     const bars = A.frames[S.tf], n = bars.length, I = Chart.indicators(bars, S.tf !== "1Day"), T = Chart.trend(bars, I), F = R.facts;
@@ -1993,20 +2015,23 @@ if (typeof module !== "undefined") module.exports = Chart;
     if (!marketState().open) warn.push("السوق مغلق الآن، فالأرقام لآخر جلسة");
     if (p !== null && p < 1) warn.push("سهم تحت دولار: السعر يتحرك بسرعة والفرق بين سعر الشراء والبيع قد يأكل جزءًا من الحركة");
     else if (F.atr_pct && F.atr_pct > 2) warn.push(`التذبذب عالٍ: الشمعة الواحدة تتحرك نحو ${F.atr_pct.toFixed(1)}%`);
-    return `<div class="simple"><div class="sh"><b class="big2">${esc(S.open)}</b> <span id="hp" class="big2 ${cls(c)}">${num(p)}</span> <span id="hc" class="${cls(c)}">${pct(c)}</span></div><div id="ho" class="note">${offHoursHtml(S.open)}</div>
-      <div class="lbl">الاتجاه حسب آخر القمم والقيعان</div><div class="trend ${col}"><span class="tword">${arrow} ${esc(st[0])}</span><span class="tdesc">${esc(st[1])}</span></div>
-      <ul class="sl">${L.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>
-      <div class="mini">حجم التداول: <b>${esc(vol)}</b></div>
-      <div class="mini">الدرجة الفنية: <b><bdi dir="ltr">${Math.round(R.score)}/100</bdi></b> على إطار ${esc(TF_LABEL[S.tf] || S.tf)}</div>
+    const fp = flowParts(S.open);
+    return `<div class="simple sx"><div class="sh2"><div class="sid"><b>${esc(S.open)}</b><div id="ho" class="note">${offHoursHtml(S.open)}</div></div><div class="spx"><span id="hp" class="big2 ${cls(c)}">${num(p)}</span><span id="hc" class="chg ${cls(c)}">${pct(c)}</span></div></div>
+      <div class="tiles"><div class="tile ${col}"><small>الاتجاه</small><b>${arrow} ${esc(st[0])}</b><span>${esc(TF_LABEL[S.tf] || S.tf)}</span></div>
+        <div class="tile" id="flowt">${fp.tile}</div>
+        <div class="tile"><small>الدرجة الفنية</small><b><bdi dir="ltr">${Math.round(R.score)}/100</bdi></b><span>على إطار ${esc(TF_LABEL[S.tf] || S.tf)}</span></div>
+        <div class="tile"><small>حجم التداول</small><b>${esc(vol)}</b></div></div>
       ${warn.map((w) => `<div class="wn">⚠ ${esc(w)}</div>`).join("")}
-      <div class="note">وصف لما يحدث في الشارت وليس توصية. القرار قرارك.</div></div>`;
+      <details class="dt"><summary>تفاصيل القراءة</summary><div class="lbl">الاتجاه حسب آخر القمم والقيعان</div><div class="tdesc">${esc(st[1])}</div>
+        <ul class="sl">${L.map((x) => `<li>${esc(x)}</li>`).join("")}</ul><div id="flowd">${fp.detail}</div>
+        <div class="note">وصف لما يحدث في الشارت وليس توصية. القرار قرارك.</div></details></div>`;
   }
   function fillDynamic(A, r) {
     const meta = { fresh: freshText() };
     const R = C.report(S.open, A.results, S.tf, A.frames[S.tf], A.levels, meta); lastR = R;
     const F = R.facts, p = livePx(S.open), c = chgPct(S.open);
     const li = (a) => (a.length ? a.map((x) => `<li>${esc(x)}</li>`).join("") : "<li>—</li>");
-    $("#ahead").className = "plain"; $("#ahead").innerHTML = simpleCard(A, R, p, c) + flowCard(S.open);
+    $("#ahead").className = "plain"; $("#ahead").innerHTML = simpleCard(A, R, p, c);
     $("#adyn").innerHTML = `<h3>الحقائق (من البيانات)</h3>
       <div class="grid">${[["RVOL", F.rvol ? F.rvol.toFixed(1) + "×" : "—"], ["RSI", F.rsi ? F.rsi.toFixed(0) : "—"], ["MACD", num(F.macd, 3)], ["إشارة", num(F.signal, 3)], ["هيستوغرام", num(F.hist, 3)], ["EMA9", num(F.ema9)], ["EMA20", num(F.ema20)], ["EMA50", num(F.ema50)], ["SMA200", num(F.sma200)], ["VWAP", num(F.vwap)], ["ATR", `${num(F.atr)} (${F.atr_pct ? F.atr_pct.toFixed(1) : "—"}%)`], ["شموع محللة", r.bars]].map(([k, v]) => `<div><span>${k}</span><b>${v}</b></div>`).join("")}</div>
       <div class="levels">${Object.entries(R.levels).filter(([k]) => R.levelNames[k]).map(([k, v]) => `<span class="chip">${R.levelNames[k]} ${num(v)}</span>`).join("")}</div>
