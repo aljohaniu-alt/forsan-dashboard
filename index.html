@@ -29,7 +29,7 @@ main{padding:12px;max-width:1100px;margin:auto}.up{color:var(--up)}.dn{color:var
 .big{font-size:24px;font-weight:700;letter-spacing:.2px}.big2{font-size:22px;font-weight:700}
 .bar{display:flex;gap:8px;margin:8px 0;flex-wrap:wrap;align-items:center}
 input,select,button{background:var(--panel);color:var(--tx);border:1px solid var(--line);border-radius:10px;padding:8px 12px;font:inherit}button{cursor:pointer}button:hover{border-color:var(--acc)}
-.tw{overflow-x:auto;border:1px solid var(--line);border-radius:var(--r);background:var(--panel2)}tr.cur td{background:#4dd0e114}table{width:100%;border-collapse:collapse;font-size:13.5px}th,td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}tr:last-child td{border-bottom:0}th{color:var(--mut);font-weight:600;background:var(--panel)}
+.tw{overflow-x:auto;border:1px solid var(--line);border-radius:var(--r);background:var(--panel2)}#lq .lstrip{display:flex;flex-wrap:wrap;gap:6px 16px;padding:8px 10px;margin:4px 0 8px;background:var(--panel);border:1px solid var(--line);border-radius:var(--r);font-size:13.5px}#lq small{color:var(--mut)}tr.cur td{background:#4dd0e114}table{width:100%;border-collapse:collapse;font-size:13.5px}th,td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}tr:last-child td{border-bottom:0}th{color:var(--mut);font-weight:600;background:var(--panel)}
 .sym{color:#7fb2ff;font-weight:700;cursor:pointer;text-decoration:none}.badge{display:inline-block;min-width:34px;text-align:center;border-radius:7px;padding:1px 7px;font-weight:700;color:#0b121a}.badge.up{background:var(--up)}.badge.dn{background:var(--dn)}.badge.mid{background:var(--mid)}
 .chip{display:inline-block;background:#18283c;border-radius:10px;padding:1px 9px;margin:2px;font-size:12px}.chip.warn{background:#4a2a20;color:#ffb199}
 .note{color:var(--mut);font-size:12.5px}.empty{color:var(--mut);padding:22px;text-align:center}.warnt{color:#ffb199}
@@ -944,6 +944,12 @@ const Chart = (function () {
           ctx.fillStyle = col; ctx.textAlign = "center"; ctx.font = "bold 9px system-ui, sans-serif"; ctx.fillText(String(g.num), xx, ny + 0.5); ctx.font = "10px system-ui, sans-serif";
         }
       });
+      // ----- أفضل سعر شراء وبيع (IEX)
+      if (d.quote) for (const [v, col, nm] of [[d.quote.b, COL.up, "شراء"], [d.quote.a, COL.dn, "بيع"]]) {
+        if (!(v > lo && v < hi)) continue;
+        ctx.strokeStyle = col + "99"; ctx.setLineDash([1, 3]); ctx.beginPath(); ctx.moveTo(0, y(v)); ctx.lineTo(plotW, y(v)); ctx.stroke(); ctx.setLineDash([]);
+        tags.push({ y: y(v), text: px(v), col, strong: false });
+      }
       // ----- السعر الحالي
       const lastP = d.price !== null && d.price !== undefined ? d.price : all[total - 1].c;
       if (lastP > lo && lastP < hi) {
@@ -1151,7 +1157,7 @@ if (typeof module !== "undefined") module.exports = Chart;
     watch: Store.get("watch", ["SPY", "QQQ", "IWM"]),
     filters: Store.get("filters", { minPrice: 0.3, maxPrice: 20, minPct: 0, minRvol: 0, minVol: 0, minAvgVol: 0, minDollar: 0, minAtr: 0, maxAtr: 100, minCap: 0 }),
     cfgAlerts: Store.get("cfgAlerts", { sound: false, rsiLow: 30, rsiHigh: 70, rvolSpike: 3, volSurge: 5 }),
-    bars1m: {}, daily: {}, trade: {}, live: {}, snap: {}, mcap: {}, alerts: [], seen: {}, prev: {}, analysis: {},
+    bars1m: {}, daily: {}, trade: {}, quote: {}, live: {}, snap: {}, mcap: {}, alerts: [], seen: {}, prev: {}, analysis: {},
     ws: { state: "off", ticks: 0, lastMsg: 0, lastTrade: 0, lag: null }, rtt: null, skew: 0, tab: "overview", open: null, tf: "5Min",
   };
   const now = () => Date.now() + S.skew;
@@ -1298,6 +1304,7 @@ if (typeof module !== "undefined") module.exports = Chart;
         else if (m.T === "success" && m.msg === "authenticated") { S.ws.state = "live"; wsDelay = 1000; subs = new Set(); wsSync(); fillGaps(); }
         else if (m.T === "error") { S.ws.err = m.code || m.msg; S.ws.state = "error:" + (m.msg || m.code); if (WS_REASONS[m.code]) S.ws.blocked = "key"; }
         else if (m.T === "t") onTrade(m);
+        else if (m.T === "q") onQuote(m);
         else if (m.T === "b" || m.T === "u") onBar(m);
       }
       renderStatus();
@@ -1309,8 +1316,8 @@ if (typeof module !== "undefined") module.exports = Chart;
     if (!ws || ws.readyState !== 1 || S.ws.state !== "live") return;
     const want = new Set(wantSyms());
     const add = [...want].filter((s) => !subs.has(s)), del = [...subs].filter((s) => !want.has(s));
-    if (add.length) ws.send(JSON.stringify({ action: "subscribe", trades: add, bars: add }));
-    if (del.length) ws.send(JSON.stringify({ action: "unsubscribe", trades: del, bars: del }));
+    if (add.length) ws.send(JSON.stringify({ action: "subscribe", trades: add, quotes: add, bars: add }));
+    if (del.length) ws.send(JSON.stringify({ action: "unsubscribe", trades: del, quotes: del, bars: del }));
     subs = want;
   }
   function onTrade(m) {
@@ -1327,6 +1334,21 @@ if (typeof module !== "undefined") module.exports = Chart;
       else { L.h = Math.max(L.h, m.p); L.l = Math.min(L.l, m.p); L.c = m.p; L.v += m.s || 0; }
     }
     if (m.S === S.open && S.tab === "analysis") chartLive(); else throttle("ui", 400, renderLive);
+  }
+  /** عرض الشراء والبيع (أفضل سعر) من IEX: يتغير أكثر من الصفقات فيعطي نبضًا أسرع للسعر. */
+  function onQuote(m) {
+    if (!(m.bp > 0) && !(m.ap > 0)) return;
+    S.quote[m.S] = { b: m.bp, a: m.ap, bs: m.bs, as: m.as, t: Date.parse(m.t) };
+    S.ws.lastMsg = now();
+    if (m.S === S.open && S.tab === "analysis") chartLive();
+  }
+  function liveStrip(sym) {
+    const tr = S.trade[sym], q = S.quote[sym], age = (t) => { const s = Math.max(0, Math.round((now() - t) / 1000)); return s < 60 ? `${s}ث` : `${Math.round(s / 60)}د`; };
+    const qOk = q && now() - q.t < 120000;
+    return `<div class="lstrip"><span>آخر صفقة <b><bdi dir="ltr">${tr ? num(tr.p) : "—"}</bdi></b>${tr ? ` <small>قبل ${age(tr.t)}</small>` : ""}</span>`
+      + `<span class="up">شراء <b><bdi dir="ltr">${qOk && q.b ? num(q.b) : "—"}</bdi></b>${qOk && q.bs ? ` <small>×${q.bs}</small>` : ""}</span>`
+      + `<span class="dn">بيع <b><bdi dir="ltr">${qOk && q.a ? num(q.a) : "—"}</bdi></b>${qOk && q.as ? ` <small>×${q.as}</small>` : ""}</span>`
+      + `<span>الفارق <b><bdi dir="ltr">${qOk && q.a && q.b ? num(q.a - q.b) : "—"}</bdi></b></span></div>`;
   }
   function onBar(m) {
     const b = C.toBar({ t: m.t, o: m.o, h: m.h, l: m.l, c: m.c, v: m.v });
@@ -1672,12 +1694,13 @@ if (typeof module !== "undefined") module.exports = Chart;
     const A = S.analysis[sym]; if (!A || !A.frames[S.tf]) return null;
     const ok = S.ws.state === "live" && marketState().open;
     return { sym, tf: S.tf, bars: A.frames[S.tf], forming: formingBar(sym, S.tf), levels: A.levels, inval: lastR ? lastR.invalidation.px : null, intraday: S.tf !== "1Day",
-      price: lastPrice(sym), chg: chgPct(sym), live: { ok, label: S.ws.state === "live" ? "CLOSED" : "OFF", lag: S.ws.lag } };
+      price: lastPrice(sym), quote: S.quote[sym] && now() - S.quote[sym].t < 120000 ? S.quote[sym] : null, chg: chgPct(sym), live: { ok, label: S.ws.state === "live" ? "CLOSED" : "OFF", lag: S.ws.lag } };
   }
   function chartLive() {
     if (!CH || !S.open) return;
     const d = chartData(S.open); if (!d) return;
     CH.setData(d); updateHead(); renderSide();
+    { const lq = $("#lq"); if (lq) lq.innerHTML = liveStrip(S.open); }
     throttle("cfeed", 1000, () => { const el = $("#cfeed"); if (el) el.innerHTML = candleFeed(S.open); });
     throttle("flowc", 3000, () => { const el = $("#flowc"); if (el && S.mode !== "adv") el.outerHTML = flowCard(S.open); });
   }
@@ -1756,10 +1779,10 @@ if (typeof module !== "undefined") module.exports = Chart;
         <div class="ctool tgrow"><div class="tg" id="atg">${TGL.map(([k, t]) => `<button data-k="${k}">${t}</button>`).join("")}</div></div>
         <div class="fsrow"><div class="chartwrap"><canvas id="chart"></canvas><div id="pick" hidden></div></div><aside id="side"></aside></div></div>
         <p class="note tiphint">اضغط على أي خط أو علامة داخل الشارت ليظهر شرحها.</p>
-        <div class="lbl">الشمعات مباشر (دقيقة)</div><div id="cfeed"></div>
+        <div class="lbl">السعر والشمعات مباشر</div><div id="lq"></div><div id="cfeed"></div>
         <details class="more" id="more"><summary>تفاصيل أكثر (للمتقدمين)</summary><div class="legend"><span>R مقاومة</span><span>S دعم</span><span>INV مستوى إبطال القراءة</span><span>HOD/LOD أعلى/أدنى اليوم</span><span>PDH/PDL أعلى/أدنى أمس</span><span>PMH/PML ما قبل السوق</span><span>ORH/ORL النطاق الافتتاحي</span><span>▲▼ حدث فني مرقّم</span><span>الشمعة المتقطعة = حية، ولا تدخل في التحليل حتى تكتمل</span></div>
         <div class="sigs" id="asig"></div><div id="adyn"></div></details>`;
-      { const cf = $("#cfeed"); if (cf) cf.innerHTML = candleFeed(S.open); }
+      { const cf = $("#cfeed"); if (cf) cf.innerHTML = candleFeed(S.open); const lq = $("#lq"); if (lq) lq.innerHTML = liveStrip(S.open); }
       CH = Chart.create($("#chart"), { show: modeShow(), onShow: (v) => { if (S.mode === "adv") Store.set("chartShow", v); }, onSignals: renderSigs, onPick: showPick, onFrame: renderSide });
       const syncMode = () => { $("#cfs").classList.toggle("adv", S.mode === "adv"); $$("#amode button").forEach((b) => b.classList.toggle("on", b.dataset.m === S.mode)); };
       syncMode(); $$("#amode button").forEach((b) => (b.onclick = () => { S.mode = b.dataset.m; Store.set("chartMode", S.mode); CH.setShow(modeShow()); syncMode(); sync(); renderSide(); }));
@@ -1895,9 +1918,10 @@ if (typeof module !== "undefined") module.exports = Chart;
     $("#gear").onclick = settings;
     setInterval(() => { renderStatus(); if (S.tab === "alerts") alertsUI($("#body")); if (S.tab === "analysis") updateHead(); }, 3000);
     setInterval(wsSync, 5000);
+    setInterval(() => { const lq = $("#lq"); if (lq && S.open && S.tab === "analysis") lq.innerHTML = liveStrip(S.open); }, 1000);
     start();
   }
-  window.FT = { get CH() { return CH; }, offHours, S, API, init, detectAlerts, staleness, passFilters, mergeBars, pushAlert, buyPressure, candleFeed, formingBar, onTrade };
+  window.FT = { get CH() { return CH; }, offHours, S, API, init, detectAlerts, staleness, passFilters, mergeBars, pushAlert, buyPressure, candleFeed, onQuote, liveStrip, formingBar, onTrade };
   window.FT.surge3 = surge3;
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init); else init();
 })();
