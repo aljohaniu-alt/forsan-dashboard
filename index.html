@@ -77,7 +77,7 @@ body.nofs{overflow:hidden}
 </style>
 </head>
 <body>
-<header><div class="top"><div class="brand"><div class="logo">📈</div><div><h1>لوحة السوق</h1><small>قراءة فنية فقط · القرار قرارك · نسخة <bdi dir="ltr">11-16 19:45 6c890df</bdi></small></div></div><button id="gear" aria-label="الإعدادات">⚙</button></div><div id="status"></div></header>
+<header><div class="top"><div class="brand"><div class="logo">📈</div><div><h1>لوحة السوق</h1><small>قراءة فنية فقط · القرار قرارك</small></div></div><button id="gear" aria-label="الإعدادات">⚙</button></div><div id="status"></div></header>
 <nav id="tabs"></nav>
 <main id="body"></main>
 <div id="settings" hidden></div>
@@ -352,6 +352,43 @@ const Core = (function () {
     }
     return out;
   }
+  // تقدير تدفق السيولة من الشموع (ليس تدفق أوامر حقيقي): كل شمعة يُقسّم حجمها بحسب موضع الإغلاق ضمن مداها
+  function flow(bars1m) {
+    const reg = bars1m.filter(isReg);
+    if (!reg.length) return null;
+    const split = (b) => {
+      const r = b.h - b.l;
+      const buy = r > 0 ? b.v * (b.c - b.l) / r : b.v * (b.c > b.o ? 1 : b.c < b.o ? 0 : 0.5);
+      return [buy, b.v - buy];
+    };
+    const days = [...new Set(reg.map((b) => b.d))].sort(), today = last(days);
+    const t = reg.filter((b) => b.d === today);
+    let inV = 0, outV = 0, inD = 0, outD = 0, pk = null, pkIn = null, pkOut = null;
+    const mins = [];
+    for (const b of t) {
+      const [bu, se] = split(b), px = (b.h + b.l + b.c) / 3;
+      inV += bu; outV += se; inD += bu * px; outD += se * px;
+      mins.push({ m: b.m, t: b.t, v: b.v, net: bu - se });
+    }
+    for (const x of mins) {
+      if (!pk || x.v > pk.v) pk = x;
+      if (!pkIn || x.net > pkIn.net) pkIn = x;
+      if (!pkOut || x.net < pkOut.net) pkOut = x;
+    }
+    const l15 = t.slice(-15).reduce((a, b) => { const [bu, se] = split(b); return a + bu - se; }, 0);
+    const tot = inV + outV;
+    const slots = {};
+    for (const b of reg) {
+      const k = Math.floor((b.m - REG0) / 30), [bu, se] = split(b);
+      const o = slots[k] || (slots[k] = { k, v: 0, net: 0 });
+      o.v += b.v; o.net += bu - se;
+    }
+    const dayTot = reg.reduce((a, b) => a + b.v, 0);
+    const list = Object.values(slots).map((o) => ({ k: o.k, m: REG0 + o.k * 30, share: dayTot ? o.v / dayTot : 0, net: o.net, netPct: o.v ? o.net / o.v : 0 }));
+    return { day: today, days: days.length, inV, outV, inD, outD, net: inV - outV, buyPct: tot ? inV / tot * 100 : 50, last15: l15,
+      peakVol: pk && { m: pk.m, v: pk.v }, peakIn: pkIn && { m: pkIn.m, net: pkIn.net }, peakOut: pkOut && { m: pkOut.m, net: pkOut.net },
+      state: !tot ? "flat" : inV / tot >= 0.55 ? "in" : inV / tot <= 0.45 ? "out" : "flat", slots: list };
+  }
   function todRvol(bars1m, lookback = 10) {
     const reg = bars1m.filter(isReg);
     if (!reg.length) return null;
@@ -477,7 +514,7 @@ const Core = (function () {
   }
 
   return { W, CAPS, TFS, MIN, DISC, clip, category, nyParts, toBar, toDaily, sma, ema, ewm, rsi, macd, atr, volumeRatio, rollingVwap, sessionVwap,
-    confirmedPivots, candlePattern, divergence, events, giveback, analyzeTF, resample, completed, levels, todRvol, compare, interpret,
+    confirmedPivots, candlePattern, divergence, events, giveback, analyzeTF, resample, completed, levels, flow, todRvol, compare, interpret,
     invalidation, report, analyzeAll, isReg, fx };
 })();
 if (typeof module !== "undefined") module.exports = Core;
@@ -1701,6 +1738,25 @@ if (typeof module !== "undefined") module.exports = Chart;
   }
 
   /** بطاقة "الصورة باختصار": اتجاه وحدود وحجم بلغة بسيطة. وصف فقط وليست توصية. */
+  function flowCard(sym) {
+    const A = S.analysis[sym]; if (!A) return "";
+    const f = C.flow(A.bars1m); if (!f) return "";
+    const ref = A.bars1m.filter(C.isReg).slice(-1)[0];
+    const rt = (m) => new Date(ref.t + (m - ref.m) * 60000).toLocaleTimeString("en-GB", { timeZone: "Asia/Riyadh", hour: "2-digit", minute: "2-digit" });
+    const K = (x) => { const a = Math.abs(x); return (x < 0 ? "-" : "") + (a >= 1e6 ? (a / 1e6).toFixed(2) + "M" : a >= 1e3 ? (a / 1e3).toFixed(1) + "K" : Math.round(a)); };
+    const D = (x) => "$" + K(x);
+    const st = { in: ["دخول أكثر من خروج", "up"], out: ["خروج أكثر من دخول", "dn"], flat: ["متوازن", "mid"] }[f.state];
+    const sl = f.slots.filter((o) => o.share > 0), busy = sl.slice().sort((a, b) => b.share - a.share).slice(0, 2);
+    const inn = sl.slice().sort((a, b) => b.netPct - a.netPct)[0], out = sl.slice().sort((a, b) => a.netPct - b.netPct)[0];
+    const seg = (o) => `${rt(o.m)}–${rt(o.m + 30)}`;
+    const hist = f.days >= 3 ? `حسب ${f.days} أيام متاحة` : "الأيام المتاحة قليلة، فالنمط تقريبي";
+    return `<div class="simple"><div class="lbl">تدفق السيولة (تقدير من الشموع)</div><div class="trend ${st[1]}"><span class="tword">${esc(st[0])}</span><span class="tdesc">نسبة الدخول <bdi dir="ltr">${f.buyPct.toFixed(0)}%</bdi> من حجم اليوم</span>
+      <ul class="sl"><li>دخول تقريبي: <bdi dir="ltr">${K(f.inV)}</bdi> سهم (${D(f.inD)})</li><li>خروج تقريبي: <bdi dir="ltr">${K(f.outV)}</bdi> سهم (${D(f.outD)})</li><li>الصافي: <bdi dir="ltr">${K(f.net)}</bdi> سهم · آخر 15 دقيقة: <bdi dir="ltr">${K(f.last15)}</bdi></li>
+      ${f.peakIn ? `<li>أقوى دقيقة دخول اليوم ${rt(f.peakIn.m)} · أقوى دقيقة خروج ${rt(f.peakOut.m)} (توقيت الرياض)</li>` : ""}</ul>
+      ${busy.length ? `<div class="mini">أكثر الأوقات ازدحامًا: <b>${busy.map(seg).join(" و ")}</b></div>` : ""}
+      ${inn && out ? `<div class="mini">أكثر شريحة يميل فيها الدخول: <b>${seg(inn)}</b> · الخروج: <b>${seg(out)}</b></div>` : ""}
+      <div class="note">${hist}. تقدير من موضع إغلاق كل شمعة داخل مداها وبيانات IEX الجزئية، وليس أوامر حقيقية. وصف لما حدث وليس توصية. القرار قرارك.</div></div></div>`;
+  }
   function simpleCard(A, R, p, c) {
     const bars = A.frames[S.tf], n = bars.length, I = Chart.indicators(bars, S.tf !== "1Day"), T = Chart.trend(bars, I), F = R.facts;
     const st = T ? Chart.STATE[T.state] : ["غير واضح", "بيانات قليلة لرسم اتجاه"], k = T ? T.state : "unclear", col = k === "up" ? "up" : k === "down" ? "dn" : "mid", arrow = k === "up" ? "↗" : k === "down" ? "↘" : k === "side" ? "↔" : "•";
@@ -1731,7 +1787,7 @@ if (typeof module !== "undefined") module.exports = Chart;
     const R = C.report(S.open, A.results, S.tf, A.frames[S.tf], A.levels, meta); lastR = R;
     const F = R.facts, p = lastPrice(S.open), c = chgPct(S.open);
     const li = (a) => (a.length ? a.map((x) => `<li>${esc(x)}</li>`).join("") : "<li>—</li>");
-    $("#ahead").className = "plain"; $("#ahead").innerHTML = simpleCard(A, R, p, c);
+    $("#ahead").className = "plain"; $("#ahead").innerHTML = simpleCard(A, R, p, c) + flowCard(S.open);
     $("#adyn").innerHTML = `<h3>الحقائق (من البيانات)</h3>
       <div class="grid">${[["RVOL", F.rvol ? F.rvol.toFixed(1) + "×" : "—"], ["RSI", F.rsi ? F.rsi.toFixed(0) : "—"], ["MACD", num(F.macd, 3)], ["إشارة", num(F.signal, 3)], ["هيستوغرام", num(F.hist, 3)], ["EMA9", num(F.ema9)], ["EMA20", num(F.ema20)], ["EMA50", num(F.ema50)], ["SMA200", num(F.sma200)], ["VWAP", num(F.vwap)], ["ATR", `${num(F.atr)} (${F.atr_pct ? F.atr_pct.toFixed(1) : "—"}%)`], ["شموع محللة", r.bars]].map(([k, v]) => `<div><span>${k}</span><b>${v}</b></div>`).join("")}</div>
       <div class="levels">${Object.entries(R.levels).filter(([k]) => R.levelNames[k]).map(([k, v]) => `<span class="chip">${R.levelNames[k]} ${num(v)}</span>`).join("")}</div>
