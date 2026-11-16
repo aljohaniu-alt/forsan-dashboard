@@ -1331,7 +1331,7 @@ if (typeof module !== "undefined") module.exports = Chart;
     const f = S.filters;
     const snaps = await API.snapshots(syms);
     const pre = syms.filter((s) => { const p = snaps[s] && snaps[s].latestTrade ? snaps[s].latestTrade.p : null; return p && p >= f.minPrice && p <= f.maxPrice; });
-    const [b5, b1d] = await Promise.all([API.bars(pre, "5Min", isoDaysAgo(6)), API.bars(pre, "1Day", isoDaysAgo(60))]);
+    const [b5, b1d, b1m] = await Promise.all([API.bars(pre, "5Min", isoDaysAgo(6)), API.bars(pre, "1Day", isoDaysAgo(60)), API.bars(pre, "1Min", isoDaysAgo(1)).catch(() => ({}))]);
     const rows = [];
     for (const s of pre) {
       const sn = snaps[s]; if (!sn) continue;
@@ -1353,10 +1353,18 @@ if (typeof module !== "undefined") module.exports = Chart;
         score: r5 ? r5.score : null, cat: r5 ? r5.category : null, dscore: rd ? rd.score : null, events: r5 ? r5.events : [],
         pmVol: pm.reduce((a, b) => a + b.v, 0), pmGap: pc && pm.length ? (pm[pm.length - 1].c / pc - 1) * 100 : null,
         near: nearBreakout(x5), rsi: r5 ? r5.facts.rsi : null,
+        s3: surge3((b1m[s] || []).map(C.toBar)),
       };
       rows.push(e);
     }
     return { rows, movers: mv, actives: ac };
+  }
+  /** سيولة آخر 3 دقائق ÷ متوسط نوافذ الـ3 دقائق في الساعة السابقة. null لو البيانات قديمة أو قليلة. */
+  function surge3(m, at = now()) {
+    const n = m.length; if (n < 64 || at - m[n - 1].t > 10 * 60000) return null;
+    const w = (i) => m[i].v + m[i - 1].v + m[i - 2].v;
+    let tot = 0; for (let k = 0; k < 20; k++) tot += w(n - 4 - k * 3);
+    const avg = tot / 20; return avg > 0 ? w(n - 1) / avg : null;
   }
   function nearBreakout(bars) {
     const n = bars.length; if (n < 25) return null;
@@ -1475,7 +1483,8 @@ if (typeof module !== "undefined") module.exports = Chart;
       const m = scan.movers, mk = (arr) => arr.map((x) => ({ sym: x.symbol, price: x.price, chg: x.percent_change, vol: 0, dollar: 1e9 })).filter((r) => r.price >= S.filters.minPrice && r.price <= S.filters.maxPrice && Math.abs(r.chg) >= S.filters.minPct);
       out.innerHTML = "<h3>الأكثر ارتفاعًا</h3>" + table([...COLS.base, ["تحذير", (r) => (r.price < 1 ? '<span class="chip warn">تحت 1$</span>' : "")]], mk(m.gainers || [])) + "<h3>الأكثر انخفاضًا</h3>" + table([...COLS.base, ["تحذير", (r) => (r.price < 1 ? '<span class="chip warn">تحت 1$</span>' : "")]], mk(m.losers || []));
     } else if (t === "volume") {
-      out.innerHTML = table([...COLS.base, ...COLS.vol, ["متوسط الحجم", (r) => big(r.avgVol)], ["سيولة $", (r) => big(r.dollar)], ...COLS.risk], rows.filter((r) => r.rvol).sort((a, b) => b.rvol - a.rvol).slice(0, 50), "لا أسهم بحجم غير معتاد ضمن الفلاتر.");
+      out.innerHTML = table([...COLS.base, ...COLS.vol, ["سيولة 3د", (r) => (r.s3 ? `<b class="${r.s3 >= 3 ? "up" : ""}">${r.s3.toFixed(1)}×</b>` : "—")], ["متوسط الحجم", (r) => big(r.avgVol)], ["سيولة $", (r) => big(r.dollar)], ...COLS.risk], rows.filter((r) => r.rvol).sort((a, b) => (b.s3 || 0) - (a.s3 || 0) || b.rvol - a.rvol).slice(0, 50), "لا أسهم بحجم غير معتاد ضمن الفلاتر.")
+        + '<p class="note">«سيولة 3د» = حجم آخر 3 دقائق مقارنةً بالمعتاد لكل 3 دقائق خلال الساعة السابقة (IEX، حجم جزئي). الترتيب بها أولًا ثم RVOL اليومي. تظهر فقط أثناء الجلسة.</p>';
     } else if (t === "momentum") {
       const pos = rows.filter((r) => r.score !== null).sort((a, b) => b.score - a.score);
       const cols = [...COLS.base, ...COLS.sc, ["RSI", (r) => (r.rsi ? r.rsi.toFixed(0) : "—")], ...COLS.vol, ["قبل السوق", (r) => (r.pmVol ? `${big(r.pmVol)} · ${pct(r.pmGap)}` : "—")], ...COLS.risk];
@@ -1736,6 +1745,7 @@ if (typeof module !== "undefined") module.exports = Chart;
     start();
   }
   window.FT = { get CH() { return CH; }, offHours, S, API, init, detectAlerts, staleness, passFilters, mergeBars, pushAlert, formingBar, onTrade };
+  window.FT.surge3 = surge3;
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init); else init();
 })();
 
