@@ -988,15 +988,17 @@ const Chart = (function () {
       // ----- لوحة تدفق السيولة (تقدير)
       if (flowH) {
         pane(flowTop, flowH); st.hits.push({ k: "pane", id: "pFLOW", key: "FLOW", y0: flowTop, y1: flowTop + flowH });
-        const ns = I.f.net.slice(s, e), cs = I.f.cum.slice(s, e);
+        const FN = I.f.net.slice(), FC = I.f.cum.slice();
+        if (d.forming) { const fb = d.forming, r = fb.h - fb.l, bu = r > 0 ? fb.v * (fb.c - fb.l) / r : fb.v * (fb.c > fb.o ? 1 : fb.c < fb.o ? 0 : 0.5), nn = 2 * bu - fb.v, prevD = d.bars.length ? d.bars[d.bars.length - 1].d : null; FN.push(nn); FC.push((d.intraday && prevD !== fb.d ? 0 : (FC.length ? FC[FC.length - 1] : 0)) + nn); }
+        const ns = FN.slice(s, e), cs = FC.slice(s, e);
         const mn = Math.max(1e-9, ...ns.map(Math.abs)), mc = Math.max(1e-9, ...cs.map(Math.abs));
         const yn = (v) => flowTop + flowH / 2 - (v / mn) * (flowH / 2 - 3), yc = (v) => flowTop + flowH / 2 - (v / mc) * (flowH / 2 - 3);
         ctx.strokeStyle = "#2c405c"; ctx.beginPath(); ctx.moveTo(0, yn(0)); ctx.lineTo(plotW, yn(0)); ctx.stroke();
-        for (let i = s; i < Math.min(e, I.f.net.length); i++) { const v = I.f.net[i]; ctx.fillStyle = (v >= 0 ? COL.up : COL.dn) + "88"; ctx.fillRect(x(i) - bw / 2, Math.min(yn(0), yn(v)), bw, Math.max(1, Math.abs(yn(v) - yn(0)))); }
+        for (let i = s; i < Math.min(e, FN.length); i++) { const v = FN[i]; ctx.fillStyle = (v >= 0 ? COL.up : COL.dn) + "88"; ctx.fillRect(x(i) - bw / 2, Math.min(yn(0), yn(v)), bw, Math.max(1, Math.abs(yn(v) - yn(0)))); }
         ctx.strokeStyle = "#4dd0e1"; ctx.lineWidth = 1.4; ctx.beginPath();
-        for (let i = s; i < Math.min(e, I.f.cum.length); i++) i === s ? ctx.moveTo(x(i), yc(I.f.cum[i])) : ctx.lineTo(x(i), yc(I.f.cum[i]));
+        for (let i = s; i < Math.min(e, FC.length); i++) i === s ? ctx.moveTo(x(i), yc(FC[i])) : ctx.lineTo(x(i), yc(FC[i]));
         ctx.stroke(); ctx.lineWidth = 1;
-        const lc = lastOf(I.f.cum);
+        const lc = lastOf(FC);
         ctx.fillStyle = "#4dd0e1"; ctx.textAlign = "left"; ctx.fillText("تدفق السيولة (تقدير) " + (lc === null ? "" : (lc >= 0 ? "+" : "") + Math.round(lc).toLocaleString("en-US")), 5, flowTop + 8);
       }
 
@@ -1662,6 +1664,7 @@ if (typeof module !== "undefined") module.exports = Chart;
     if (!CH || !S.open) return;
     const d = chartData(S.open); if (!d) return;
     CH.setData(d); updateHead(); renderSide();
+    throttle("flowc", 3000, () => { const el = $("#flowc"); if (el && S.mode !== "adv") el.outerHTML = flowCard(S.open); });
   }
 
   /** تكبير الشارت لكامل الشاشة مع لوحة أرقام جانبية. */
@@ -1767,14 +1770,15 @@ if (typeof module !== "undefined") module.exports = Chart;
   /** بطاقة "الصورة باختصار": اتجاه وحدود وحجم بلغة بسيطة. وصف فقط وليست توصية. */
   function flowCard(sym) {
     const A = S.analysis[sym]; if (!A) return "";
-    const f = C.flow(A.bars1m); if (!f) return "";
+    const L = S.live[sym], q = L && C.nyParts(L.k * 60000), m1 = L && !A.bars1m.some((b) => b.t === L.k * 60000) && q.m >= 570 && q.m <= 959 ? A.bars1m.concat([{ t: L.k * 60000, d: q.d, m: q.m, o: L.o, h: L.h, l: L.l, c: L.c, v: L.v }]) : A.bars1m;
+    const f = C.flow(m1); if (!f) return "";
     const K = (x) => { const a = Math.abs(x); return (x < 0 ? "-" : "") + (a >= 1e6 ? (a / 1e6).toFixed(2) + "M" : a >= 1e3 ? (a / 1e3).toFixed(1) + "K" : Math.round(a)); };
-    const t = A.bars1m.filter((b) => b.d === f.day && C.isReg(b)), fs = C.flowSeries(t, false), n = t.length, k = Math.min(30, n - 1);
+    const t = m1.filter((b) => b.d === f.day && C.isReg(b)), fs = C.flowSeries(t, false), n = t.length, k = Math.min(30, n - 1);
     const dP = k > 0 ? t[n - 1].c - t[n - 1 - k].c : 0, dF = k > 0 ? fs.cum[n - 1] - fs.cum[n - 1 - k] : 0;
     const tr = !k ? "" : dF > 0 && dP >= 0 ? "السعر والسيولة يصعدان معًا في آخر 30 دقيقة: الصعود مدعوم بدخول." : dF < 0 && dP <= 0 ? "السعر والسيولة ينزلان معًا في آخر 30 دقيقة: الهبوط مصحوب بخروج." : dF < 0 && dP > 0 ? "السعر يصعد لكن السيولة تنزل: الصعود بلا دعم واضح من الدخول." : dF > 0 && dP < 0 ? "السعر ينزل لكن السيولة تصعد: الهبوط يقابله دخول." : "";
     const st = { in: ["دخول أكثر من خروج", "up"], out: ["خروج أكثر من دخول", "dn"], flat: ["متوازن", "mid"] }[f.state];
     const l15 = f.last15 > 0 ? "دخول" : f.last15 < 0 ? "خروج" : "متوازن";
-    return `<div class="simple"><div class="lbl">قراءة مؤشر السيولة (الخط الأزرق أسفل الشارت)</div><div class="trend ${st[1]}"><span class="tword">${esc(st[0])}</span><span class="tdesc">نسبة الدخول <bdi dir="ltr">${f.buyPct.toFixed(0)}%</bdi> من حجم اليوم</span>
+    return `<div class="simple" id="flowc"><div class="lbl">قراءة مؤشر السيولة (الخط الأزرق أسفل الشارت)</div><div class="trend ${st[1]}"><span class="tword">${esc(st[0])}</span><span class="tdesc">نسبة الدخول <bdi dir="ltr">${f.buyPct.toFixed(0)}%</bdi> من حجم اليوم</span>
       <ul class="sl"><li>دخول تقريبي: <bdi dir="ltr">${K(f.inV)}</bdi> سهم · خروج تقريبي: <bdi dir="ltr">${K(f.outV)}</bdi> سهم</li><li>الصافي: <bdi dir="ltr">${K(f.net)}</bdi> سهم · آخر 15 دقيقة: ${l15} (<bdi dir="ltr">${K(f.last15)}</bdi>)</li>${tr ? `<li>${esc(tr)}</li>` : ""}</ul>
       <div class="note">تقدير من الشموع وبيانات IEX الجزئية، وليس أوامر حقيقية. وصف لما حدث وليس توصية. القرار قرارك.</div></div></div>`;
   }
