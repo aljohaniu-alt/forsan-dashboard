@@ -74,10 +74,46 @@ body.nofs{overflow:hidden}
 .more{margin:12px 0}.more>summary{cursor:pointer;padding:10px 14px;background:var(--panel);border:1px solid var(--line);border-radius:var(--r);font-weight:700;color:var(--acc);list-style:none}.more[open]>summary{margin-bottom:8px}
 #cfs:not(.adv) .tgrow{display:none}
 @media(max-width:560px){.mtf{grid-template-columns:repeat(4,1fr)}canvas{height:480px}}
+
+/* ===== طبقة التصميم الاحترافي (عرض فقط، لا تغيّر أي منطق) ===== */
+:root{--bg:#070d18;--panel:#0f1a2b;--panel2:#0b1424;--line:#1b2a42;--line2:#25395a;--tx:#e8eff8;--mut:#8aa0ba;--up:#2bc4a8;--dn:#f4585a;--mid:#f6c344;--acc:#4c8dff;--r:16px;--sh:0 1px 0 rgba(255,255,255,.03) inset,0 8px 24px rgba(0,0,0,.28)}
+body{background:radial-gradient(1200px 500px at 85% -10%,#0f2342 0%,transparent 60%),radial-gradient(900px 400px at 0% 0%,#0b2a2f 0%,transparent 55%),var(--bg);background-attachment:fixed;font-variant-numeric:tabular-nums;letter-spacing:.1px}
+bdi,.num,.big,.big2,table td,.pill b{font-variant-numeric:tabular-nums}
+header{background:linear-gradient(180deg,rgba(9,16,29,.96),rgba(9,16,29,.86));border-bottom:1px solid var(--line2);box-shadow:0 6px 24px rgba(0,0,0,.35)}
+.logo{width:38px;height:38px;border-radius:12px;background:linear-gradient(135deg,#3b82f6 0%,#22c3a6 100%);box-shadow:0 4px 14px rgba(59,130,246,.45),inset 0 1px 0 rgba(255,255,255,.35)}
+.brand h1{font-size:17px;font-weight:800;letter-spacing:.2px}.brand small{opacity:.85}
+#gear{transition:.15s}#gear:hover{border-color:var(--acc);transform:rotate(30deg)}
+.pill{background:rgba(255,255,255,.04);border-color:var(--line2);backdrop-filter:blur(6px)}
+#tabs{background:rgba(7,13,24,.9);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);gap:6px;padding:9px 12px}
+#tabs button{border:1px solid transparent;border-radius:999px;padding:7px 15px;transition:.15s}
+#tabs button:hover{color:var(--tx);background:rgba(255,255,255,.05)}
+#tabs button.on{background:linear-gradient(180deg,#16335c,#10264a);border-color:#2a5aa8;color:#fff;box-shadow:0 4px 14px rgba(59,130,246,.25)}
+main{padding:14px 12px 20px}
+.card,.tw,.simple,.trend,.head,.plain,.more{box-shadow:var(--sh)}
+.card{background:linear-gradient(180deg,#12203a 0%,#0e192c 100%);border:1px solid var(--line2);border-radius:var(--r);transition:transform .15s,border-color .15s,box-shadow .15s}
+.card[data-open]:hover{border-color:var(--acc);transform:translateY(-2px);box-shadow:0 12px 28px rgba(0,0,0,.4)}
+.card b{letter-spacing:.3px}.card .big{font-size:26px;line-height:1.15;margin:2px 0}
+.cards{gap:12px;grid-template-columns:repeat(auto-fill,minmax(170px,1fr))}
+.lbl{color:var(--mut);font-size:12.5px;font-weight:700;letter-spacing:.4px;margin:14px 2px 8px;text-transform:none}
+.badge{border-radius:8px;box-shadow:inset 0 -2px 0 rgba(0,0,0,.18)}
+.tw{border-color:var(--line2);border-radius:var(--r);overflow:hidden}
+th{font-size:12px;letter-spacing:.4px;background:#0d1829}tr:hover td{background:rgba(255,255,255,.025)}
+input,select,button{border-color:var(--line2);transition:border-color .15s,background .15s,box-shadow .15s}
+input:focus,select:focus{outline:none;border-color:var(--acc);box-shadow:0 0 0 3px rgba(76,141,255,.22)}
+button:hover{border-color:#3a5b8c}button:active{transform:scale(.98)}
+.seg{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:2px}.seg button{border:0;background:transparent;border-radius:10px}.seg button.on{background:#16335c;color:#fff;box-shadow:0 2px 10px rgba(59,130,246,.3)}
+.chartwrap{border-radius:var(--r);overflow:hidden;border:1px solid var(--line2);box-shadow:var(--sh)}
+.livebtn.on{background:rgba(255,82,82,.1);border-color:#ff5252}
+.note{color:var(--mut);font-size:12.5px;line-height:1.7}
+.empty{text-align:center;color:var(--mut);padding:28px 12px;border:1px dashed var(--line2);border-radius:var(--r)}
+::-webkit-scrollbar{height:8px;width:8px}::-webkit-scrollbar-thumb{background:#223656;border-radius:8px}::-webkit-scrollbar-track{background:transparent}
+:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+@media (max-width:480px){.cards{grid-template-columns:repeat(2,1fr);gap:10px}.card .big{font-size:23px}main{padding:12px 10px}.brand h1{font-size:16px}}
 </style>
 </head>
 <body>
-<header><div class="top"><div class="brand"><div class="logo">📈</div><div><h1>لوحة السوق</h1><small>قراءة فنية فقط · القرار قرارك</small></div></div><button id="gear" aria-label="الإعدادات">⚙</button></div><div id="status"></div></header>
+<header><div class="top"><div class="brand"><div class="logo"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 17l5-6 4 3 7-9" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><circle cx="20" cy="5" r="2" fill="#fff"/></svg></div><div><h1>لوحة السوق</h1><small>قراءة فنية فقط · القرار قرارك</small></div></div><button id="gear" aria-label="الإعدادات">⚙</button></div><div id="status"></div></header>
 <nav id="tabs"></nav>
 <main id="body"></main>
 <div id="settings" hidden></div>
