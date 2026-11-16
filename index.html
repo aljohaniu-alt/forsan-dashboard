@@ -135,7 +135,7 @@ details.dg{border:0;margin:2px 0 0;padding:0}details.dg>summary{color:var(--mut)
 </style>
 </head>
 <body>
-<header><div class="top"><div class="brand"><div class="logo"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 17l5-6 4 3 7-9" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><circle cx="20" cy="5" r="2" fill="#fff"/></svg></div><div><h1>لوحة السوق</h1><small>قراءة فنية فقط · القرار قرارك · نسخة <bdi dir="ltr" id="ver">11-16 23:49 · f558097</bdi></small></div></div><button id="gear" aria-label="الإعدادات">⚙</button></div><div id="status"></div></header>
+<header><div class="top"><div class="brand"><div class="logo"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 17l5-6 4 3 7-9" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><circle cx="20" cy="5" r="2" fill="#fff"/></svg></div><div><h1>لوحة السوق</h1><small>قراءة فنية فقط · القرار قرارك · نسخة <bdi dir="ltr" id="ver">11-17 00:04 · 511caca</bdi></small></div></div><button id="gear" aria-label="الإعدادات">⚙</button></div><div id="status"></div></header>
 <nav id="tabs"></nav>
 <main id="body"></main>
 <div id="settings" hidden></div>
@@ -1211,7 +1211,7 @@ if (typeof module !== "undefined") module.exports = Chart;
   };
   const S = {
     mode: Store.get("chartMode", "simple"), liveMode: Store.get("liveMode", true),
-    key: Store.get("key", ""), secret: Store.get("secret", ""), ntfy: Store.get("ntfy", ""), finnhub: Store.get("finnhub", ""),
+    key: Store.get("key", ""), secret: Store.get("secret", ""), ntfy: Store.get("ntfy", ""), ghtok: Store.get("ghtok", ""), ghmsg: "", finnhub: Store.get("finnhub", ""),
     watch: Store.get("watch", []),
     filters: Store.get("filters", { minPrice: 0.3, maxPrice: 20, minPct: 0, minRvol: 0, minVol: 0, minAvgVol: 0, minDollar: 0, minAtr: 0, maxAtr: 100, minCap: 0 }),
     cfgAlerts: Store.get("cfgAlerts", { sound: false, rsiLow: 30, rsiHigh: 70, rvolSpike: 3, volSurge: 5 }),
@@ -1432,7 +1432,24 @@ if (typeof module !== "undefined") module.exports = Chart;
       setTimeout(() => location.reload(), 1200);
     } catch (e) { /* بلا شبكة: نتجاهل */ } finally { updBusy = false; }
   }
+  let ghT = null;
+  function ghSync(now) {
+    if (!S.ghtok) return;
+    clearTimeout(ghT);
+    ghT = setTimeout(async () => {
+      const u = "https://api.github.com/repos/aljohaniu-alt/forsan-trader/contents/watch_spec.txt", h = { Authorization: "Bearer " + S.ghtok, Accept: "application/vnd.github+json" };
+      try {
+        const g = await fetch(u + "?ref=main", { headers: h }); let sha; if (g.ok) sha = (await g.json()).sha; else if (g.status !== 404) { S.ghmsg = "رفض GitHub القراءة (رمز " + g.status + ")"; return; }
+        const txt = "# تُحدَّث تلقائيًا من مفضلة الموقع. لا تعدّلها يدويًا.\n" + S.watch.join("\n") + "\n";
+        const b64 = btoa(String.fromCharCode(...new TextEncoder().encode(txt)));
+        const r = await fetch(u, { method: "PUT", headers: h, body: JSON.stringify({ message: "تحديث قائمة المراقبة من الموقع", content: b64, branch: "main", ...(sha ? { sha } : {}) }) });
+        S.ghmsg = r.ok ? "تمت مزامنة " + S.watch.length + " سهم مع المراقب" : "رفض GitHub الكتابة (رمز " + r.status + ")";
+      } catch (e) { S.ghmsg = "تعذر الاتصال بـ GitHub"; }
+      const el = $("#ghres"); if (el) el.textContent = S.ghmsg;
+    }, now ? 0 : 2500);
+  }
   function wsSync() {
+    ghSync();
     fhSync();
     if (!ws || ws.readyState !== 1 || S.ws.state !== "live") return;
     const want = new Set(wantSyms());
@@ -2140,6 +2157,8 @@ if (typeof module !== "undefined") module.exports = Chart;
       <p class="warnt">استخدم مفاتيح بيانات أو حساب تجريبي (Paper) فقط. المفاتيح تُحفظ في هذا الجهاز ولا تُرسل لأي جهة إلا Alpaca.</p>
       <label>Alpaca Key ID<input id="sk" value="${esc(S.key)}" autocomplete="off"></label><label>Alpaca Secret<input id="ss" type="password" value="${esc(S.secret)}" autocomplete="off"></label>
       <label>موضوع ntfy (اختياري: يرسل تنبيهات الصفحة لجوالك)<input id="sn" value="${esc(S.ntfy)}"></label>
+      <label>مفتاح GitHub (للمزامنة، يُحفظ في هذا الجهاز فقط)<input id="sg" type="password" value="${esc(S.ghtok)}" autocomplete="off"></label>
+      <div class="bar"><button id="gtest" type="button">مزامنة المفضلة مع المراقب الآن</button></div><div id="ghres" class="note"></div>
       <label>Finnhub Key (اختياري: للقيمة السوقية)<input id="sf" value="${esc(S.finnhub)}"></label>
       <div class="bar"><button id="ntest" type="button">اختبار إشعار الجوال</button></div><div id="ntres" class="note"></div>
       <div class="bar"><button id="ssave">حفظ</button><button id="sclose">إغلاق</button></div></div>`;
@@ -2153,8 +2172,9 @@ if (typeof module !== "undefined") module.exports = Chart;
         out.textContent = r.ok ? "تم الإرسال إلى ntfy. تحقق من جوالك الآن: إذا لم يصل فاشتراك التطبيق أو إذن الإشعارات هو السبب." : `رفضه ntfy (رمز ${r.status}). تأكد من اسم الموضوع.`;
       } catch (e) { out.textContent = "تعذر الوصول إلى ntfy.sh من هذا الجهاز/الشبكة."; }
     };
+    $("#gtest").onclick = () => { S.ghtok = $("#sg").value.trim(); Store.set("ghtok", S.ghtok); $("#ghres").textContent = "جارٍ المزامنة…"; ghSync(true); };
     $("#sclose").onclick = () => (d.hidden = true);
-    $("#ssave").onclick = () => { S.key = $("#sk").value.trim(); S.secret = $("#ss").value.trim(); S.ntfy = $("#sn").value.trim(); S.finnhub = $("#sf").value.trim(); ["key", "secret", "ntfy", "finnhub"].forEach((k) => Store.set(k, S[k])); d.hidden = true; start(); };
+    $("#ssave").onclick = () => { S.key = $("#sk").value.trim(); S.secret = $("#ss").value.trim(); S.ntfy = $("#sn").value.trim(); S.finnhub = $("#sf").value.trim(); S.ghtok = $("#sg").value.trim(); ["key", "secret", "ntfy", "finnhub", "ghtok"].forEach((k) => Store.set(k, S[k])); d.hidden = true; start(); };
   }
   function start() { render(); if (S.key && S.secret) { wsDelay = 1000; wsConnect(); S.watch.forEach((s) => loadSymbol(s).catch(() => {})); } }
   function init() {
