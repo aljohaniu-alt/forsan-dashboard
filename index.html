@@ -135,7 +135,7 @@ details.dg{border:0;margin:2px 0 0;padding:0}details.dg>summary{color:var(--mut)
 </style>
 </head>
 <body>
-<header><div class="top"><div class="brand"><div class="logo"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 17l5-6 4 3 7-9" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><circle cx="20" cy="5" r="2" fill="#fff"/></svg></div><div><h1>لوحة السوق</h1><small>قراءة فنية فقط · القرار قرارك · نسخة <bdi dir="ltr" id="ver">11-16 23:45 · 7ce46b1</bdi></small></div></div><button id="gear" aria-label="الإعدادات">⚙</button></div><div id="status"></div></header>
+<header><div class="top"><div class="brand"><div class="logo"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 17l5-6 4 3 7-9" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><circle cx="20" cy="5" r="2" fill="#fff"/></svg></div><div><h1>لوحة السوق</h1><small>قراءة فنية فقط · القرار قرارك · نسخة <bdi dir="ltr" id="ver">11-16 23:49 · f558097</bdi></small></div></div><button id="gear" aria-label="الإعدادات">⚙</button></div><div id="status"></div></header>
 <nav id="tabs"></nav>
 <main id="body"></main>
 <div id="settings" hidden></div>
@@ -2141,8 +2141,18 @@ if (typeof module !== "undefined") module.exports = Chart;
       <label>Alpaca Key ID<input id="sk" value="${esc(S.key)}" autocomplete="off"></label><label>Alpaca Secret<input id="ss" type="password" value="${esc(S.secret)}" autocomplete="off"></label>
       <label>موضوع ntfy (اختياري: يرسل تنبيهات الصفحة لجوالك)<input id="sn" value="${esc(S.ntfy)}"></label>
       <label>Finnhub Key (اختياري: للقيمة السوقية)<input id="sf" value="${esc(S.finnhub)}"></label>
+      <div class="bar"><button id="ntest" type="button">اختبار إشعار الجوال</button></div><div id="ntres" class="note"></div>
       <div class="bar"><button id="ssave">حفظ</button><button id="sclose">إغلاق</button></div></div>`;
     d.hidden = false;
+    $("#ntest").onclick = async () => {
+      const topic = $("#sn").value.trim(), out = $("#ntres");
+      if (!topic) { out.textContent = "اكتب موضوع ntfy أولًا (نفس الاسم المشترك فيه في تطبيق ntfy على جوالك)، ثم اضغط الاختبار."; return; }
+      out.textContent = "جارٍ الإرسال…";
+      try {
+        const r = await fetch("https://ntfy.sh/", { method: "POST", body: JSON.stringify({ topic, title: "اختبار لوحة السوق", message: "إذا وصلك هذا الإشعار على الجوال فالتنبيهات تعمل. قراءة فقط.", priority: 4 }) });
+        out.textContent = r.ok ? "تم الإرسال إلى ntfy. تحقق من جوالك الآن: إذا لم يصل فاشتراك التطبيق أو إذن الإشعارات هو السبب." : `رفضه ntfy (رمز ${r.status}). تأكد من اسم الموضوع.`;
+      } catch (e) { out.textContent = "تعذر الوصول إلى ntfy.sh من هذا الجهاز/الشبكة."; }
+    };
     $("#sclose").onclick = () => (d.hidden = true);
     $("#ssave").onclick = () => { S.key = $("#sk").value.trim(); S.secret = $("#ss").value.trim(); S.ntfy = $("#sn").value.trim(); S.finnhub = $("#sf").value.trim(); ["key", "secret", "ntfy", "finnhub"].forEach((k) => Store.set(k, S[k])); d.hidden = true; start(); };
   }
