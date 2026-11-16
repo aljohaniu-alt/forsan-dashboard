@@ -25,7 +25,7 @@ header{position:sticky;top:0;z-index:6;background:rgba(11,18,32,.92);backdrop-fi
 #tabs button{flex:0 0 auto;background:transparent;color:var(--mut);border:0;border-radius:10px;padding:7px 13px;font-size:14px;cursor:pointer;font-weight:600}
 #tabs button.on{background:var(--panel);color:var(--tx);box-shadow:inset 0 -2px 0 var(--acc)}#tabs i{font-style:normal;background:var(--dn);color:#fff;border-radius:9px;padding:0 6px;margin-right:6px;font-size:11px}
 main{padding:12px;max-width:1100px;margin:auto}.up{color:var(--up)}.dn{color:var(--dn)}.mid{color:var(--mid)}
-.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;cursor:pointer}.card.wide{grid-column:1/-1;margin-top:10px;cursor:default}
+.chead{display:flex;justify-content:space-between;align-items:center}.spk{width:100%;height:28px;margin:4px 0;display:block}.card:active{transform:scale(.99)}.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;cursor:pointer}.card.wide{grid-column:1/-1;margin-top:10px;cursor:default}
 .big{font-size:24px;font-weight:700;letter-spacing:.2px}.big2{font-size:22px;font-weight:700}
 .bar{display:flex;gap:8px;margin:8px 0;flex-wrap:wrap;align-items:center}
 input,select,button{background:var(--panel);color:var(--tx);border:1px solid var(--line);border-radius:10px;padding:8px 12px;font:inherit}button{cursor:pointer}button:hover{border-color:var(--acc)}
@@ -1154,12 +1154,15 @@ if (typeof module !== "undefined") module.exports = Chart;
   const S = {
     mode: Store.get("chartMode", "simple"), liveMode: Store.get("liveMode", true),
     key: Store.get("key", ""), secret: Store.get("secret", ""), ntfy: Store.get("ntfy", ""), finnhub: Store.get("finnhub", ""),
-    watch: Store.get("watch", ["SPY", "QQQ", "IWM"]),
+    watch: Store.get("watch", []),
     filters: Store.get("filters", { minPrice: 0.3, maxPrice: 20, minPct: 0, minRvol: 0, minVol: 0, minAvgVol: 0, minDollar: 0, minAtr: 0, maxAtr: 100, minCap: 0 }),
     cfgAlerts: Store.get("cfgAlerts", { sound: false, rsiLow: 30, rsiHigh: 70, rvolSpike: 3, volSurge: 5 }),
     fh: { state: "off" }, bars1m: {}, daily: {}, trade: {}, quote: {}, live: {}, snap: {}, mcap: {}, alerts: [], seen: {}, prev: {}, analysis: {},
     ws: { state: "off", ticks: 0, lastMsg: 0, lastTrade: 0, lag: null }, rtt: null, skew: 0, tab: "overview", open: null, tf: "5Min",
   };
+  // تنظيف لمرة واحدة بطلب المستخدم: إزالة الأسهم الافتراضية القديمة (SPY/QQQ/IWM) من القائمة
+  if (!Store.get("wlClean1", false)) { S.watch = S.watch.filter((x) => !["SPY", "QQQ", "IWM"].includes(x)); Store.set("watch", S.watch); Store.set("wlClean1", true); }
+
   const now = () => Date.now() + S.skew;
 
   // ---------------------------------------------------------------- واجهة Alpaca
@@ -1382,7 +1385,7 @@ if (typeof module !== "undefined") module.exports = Chart;
     if (!(m.bp > 0) && !(m.ap > 0)) return;
     S.quote[m.S] = { b: m.bp, a: m.ap, bs: m.bs, as: m.as, t: Date.parse(m.t) };
     S.ws.lastMsg = now();
-    if (m.S === S.open && S.tab === "analysis") chartLive();
+    if (m.S === S.open && S.tab === "analysis") chartLive(); else throttle("ui", 400, renderLive);
   }
   function liveStrip(sym) {
     const tr = S.trade[sym], q = S.quote[sym], age = (t) => { const s = Math.max(0, Math.round((now() - t) / 1000)); return s < 60 ? `${s}ث` : `${Math.round(s / 60)}د`; };
@@ -1692,14 +1695,30 @@ if (typeof module !== "undefined") module.exports = Chart;
     bindOpen();
   }
 
+  /** خط صغير لحركة اليوم (إغلاقات الدقيقة في جلسة اليوم). */
+  function spark(sym) {
+    const A = S.analysis[sym]; if (!A) return "";
+    const m = A.bars1m.filter((b) => C.isReg(b)); if (m.length < 3) return "";
+    const day = m[m.length - 1].d, t = m.filter((b) => b.d === day), step = Math.max(1, Math.ceil(t.length / 60));
+    const pts = t.filter((_, i) => i % step === 0 || i === t.length - 1).map((b) => b.c), lp = livePx(sym);
+    if (lp) pts.push(lp);
+    const lo = Math.min(...pts), hi = Math.max(...pts), r = hi - lo || 1, W = 120, H = 28;
+    const d = pts.map((v, i) => `${(i / (pts.length - 1) * W).toFixed(1)},${(H - 2 - (v - lo) / r * (H - 4)).toFixed(1)}`).join(" ");
+    const up = pts[pts.length - 1] >= pts[0];
+    return `<svg class="spk" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true"><polyline fill="none" stroke="${up ? "var(--up,#26a69a)" : "var(--dn,#ef5350)"}" stroke-width="1.6" points="${d}"/></svg>`;
+  }
   function overviewUI(el) {
-    const idx = ["SPY", "QQQ", "IWM"], mk = marketState();
-    el.innerHTML = `<div class="cards">${idx.map((s) => {
-      const A = S.analysis[s], r = A && A.results["5Min"], c = chgPct(s);
-      return `<div class="card" data-open="${s}"><b>${s}</b><div class="big ${cls(c)}">${num(lastPrice(s))}</div><div class="${cls(c)}">${pct(c)}</div><div>${r ? scoreBadge(r.score, r.category) + " " + esc(r.category.split(" (")[0]) : "جارٍ التحميل…"}</div></div>`;
-    }).join("")}</div><div class="card wide"><b>حالة السوق الأمريكي</b><div>${mk.label} · توقيت نيويورك ${new Date(now()).toLocaleTimeString("en-US", { timeZone: "America/New_York" })}</div></div>
+    const list = S.watch.slice(0, 30), mk = marketState();
+    const cards = list.map((s) => {
+      const A = S.analysis[s], r = A && A.results["5Min"], c = chgPct(s), f = A ? C.flow(liveM1(s)) : null;
+      const fl = f ? `<div class="mini">دخول <bdi dir="ltr">${f.buyPct.toFixed(0)}%</bdi> · ${f.state === "in" ? "تدفق داخل" : f.state === "out" ? "تدفق خارج" : "متوازن"}</div>` : "";
+      return `<div class="card" data-open="${esc(s)}"><div class="chead"><b>${esc(s)}</b><span class="${cls(c)}">${pct(c)}</span></div><div class="big ${cls(c)}">${num(livePx(s))}</div>${spark(s)}<div>${r ? scoreBadge(r.score, r.category) + " " + esc(r.category.split(" (")[0]) : "جارٍ التحميل…"}</div>${fl}</div>`;
+    }).join("");
+    el.innerHTML = `<div class="lbl">مفضلتي · ${list.length} ${list.length === 1 ? "سهم" : "أسهم"}</div>`
+      + (list.length ? `<div class="cards">${cards}</div>` : '<p class="empty">المفضلة فارغة. أضف رموز الأسهم من تبويب «قائمتي» وتظهر هنا مباشرة.</p>')
+      + `<div class="card wide"><b>حالة السوق الأمريكي</b><div>${mk.label} · توقيت نيويورك ${new Date(now()).toLocaleTimeString("en-US", { timeZone: "America/New_York" })}</div></div>
       <p class="note">${esc(C.DISC)}</p>`;
-    idx.forEach((s) => { if (!S.bars1m[s]) loadSymbol(s).catch(() => {}); });
+    list.forEach((s) => { if (!S.bars1m[s]) loadSymbol(s).catch(() => {}); });
     bindOpen();
   }
   function watchUI(el) {
@@ -1709,7 +1728,7 @@ if (typeof module !== "undefined") module.exports = Chart;
   }
   function renderWatchList() {
     const el = $("#wlist"); if (!el) return;
-    const rows = S.watch.map((s) => { const A = S.analysis[s], r = A && A.results["5Min"]; return { sym: s, price: lastPrice(s), chg: chgPct(s), score: r ? r.score : null, cat: r ? r.category : null, rvol: r ? r.facts.rvol : null, n: S.alerts.filter((a) => a.sym === s).length }; });
+    const rows = S.watch.map((s) => { const A = S.analysis[s], r = A && A.results["5Min"]; return { sym: s, price: livePx(s), chg: chgPct(s), score: r ? r.score : null, cat: r ? r.category : null, rvol: r ? r.facts.rvol : null, n: S.alerts.filter((a) => a.sym === s).length }; });
     el.innerHTML = table([...COLS.base, ["الدرجة", (r) => scoreBadge(r.score, r.cat)], ["RVOL", (r) => (r.rvol ? r.rvol.toFixed(1) + "×" : "—")], ["تنبيهات", (r) => r.n || ""], ["", (r) => `<a class="rm" data-rm="${r.sym}">حذف</a>`]], rows, "القائمة فارغة.");
     $$("[data-rm]").forEach((a) => (a.onclick = () => { S.watch = S.watch.filter((x) => x !== a.dataset.rm); Store.set("watch", S.watch); wsSync(); render(); }));
     bindOpen();
@@ -1769,7 +1788,7 @@ if (typeof module !== "undefined") module.exports = Chart;
   function renderSide() {
     const el = $("#side"); if (!el || !CH || !S.open) return;
     const sn = CH.snapshot(); if (!sn) return;
-    const p = lastPrice(S.open), c = chgPct(S.open), A = S.analysis[S.open], lv = (A && A.levels) || {}, b = sn.b, up = b.c >= b.o;
+    const p = livePx(S.open), c = chgPct(S.open), A = S.analysis[S.open], lv = (A && A.levels) || {}, b = sn.b, up = b.c >= b.o;
     const row = (k, v, cl) => `<div class="r"><span>${k}</span><b class="${cl || ""}">${v === null || v === undefined || (typeof v === "number" && Number.isNaN(v)) ? "—" : typeof v === "number" ? num(v) : v}</b></div>`;
     const vol = b.v >= 1e6 ? (b.v / 1e6).toFixed(2) + "M" : b.v >= 1e3 ? (b.v / 1e3).toFixed(1) + "K" : String(b.v);
     const lag = S.ws.lag;
@@ -1823,10 +1842,23 @@ if (typeof module !== "undefined") module.exports = Chart;
     b.className = "livebtn" + (S.liveMode ? " on" : ""); b.textContent = S.liveMode ? "● مباشر" : "○ متوقف";
   }
   let tailBusy = false;
+  async function refreshTails(syms) {
+    const list = syms.filter((s) => S.bars1m[s] && S.bars1m[s].length);
+    if (!list.length) return;
+    const since = Math.min(...list.map((s) => S.bars1m[s][S.bars1m[s].length - 1].t)) - 60000;
+    const j = await API.bars(list, "1Min", new Date(since).toISOString());
+    for (const s of list) { S.bars1m[s] = mergeBars(S.bars1m[s], (j[s] || []).map(C.toBar)); refresh(s); }
+  }
   function liveTick(n) {
-    if (!S.liveMode || S.tab !== "analysis" || !S.open || !CH) return;
-    chartLive();
-    if (n % 8 === 0 && marketState().open && !tailBusy) { tailBusy = true; refreshTail(S.open).catch(() => {}).finally(() => { tailBusy = false; }); }
+    if (!S.liveMode) return;
+    const open = marketState().open, el = typeof document !== "undefined" ? document.activeElement : null, typing = el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA");
+    if (S.tab === "analysis" && S.open && CH) {
+      chartLive();
+      if (n % 8 === 0 && open && !tailBusy) { tailBusy = true; refreshTail(S.open).catch(() => {}).finally(() => { tailBusy = false; }); }
+    } else if ((S.tab === "overview" || S.tab === "watch") && !typing) {
+      renderLive();
+      if (n % 8 === 0 && open && !tailBusy) { tailBusy = true; refreshTails(S.watch.slice(0, 12)).catch(() => {}).finally(() => { tailBusy = false; }); }
+    }
   }
   function renderAnalysisBox() {
     const box = $("#abox"); if (!box || !S.open) return;
@@ -1872,7 +1904,7 @@ if (typeof module !== "undefined") module.exports = Chart;
   /** شموع أقل من 30: نعرض الشارت فقط، بلا درجة ولا قراءة (لا نخترع تحليلًا من بيانات قليلة). */
   function fillLimited(A, frame) {
     lastR = null;
-    const p = lastPrice(S.open), c = chgPct(S.open);
+    const p = livePx(S.open), c = chgPct(S.open);
     $("#ahead").className = "head"; $("#ahead").innerHTML = `<div><b class="big2">${esc(S.open)}</b> <span id="hp" class="big2 ${cls(c)}">${num(p)}</span> <span id="hc" class="${cls(c)}">${pct(c)}</span></div><div id="ho" class="note">${offHoursHtml(S.open)}</div>`;
     $("#adyn").innerHTML = `<div class="warnbox"><b>⚠ بيانات قليلة: ${frame.length} شمعة مكتملة فقط في إطار ${esc(S.tf)}</b><p class="note" style="margin:6px 0">السهم قليل التداول على IEX (يظهر هذا في الوارنت والأسهم الضعيفة السيولة)، لذلك لا يمكن حساب الدرجة والقراءة (يلزم 30 شمعة مكتملة على الأقل). الشارت يعرض الشموع المتوفرة فقط. جرّب إطارًا أكبر مثل 15د أو يومي.</p></div>
       <p class="note">البيانات: <span id="fresh">${esc(freshText())}</span> · المصدر IEX · حجم جزئي</p><p class="note">${esc(C.DISC)}</p>`;
@@ -1936,7 +1968,7 @@ if (typeof module !== "undefined") module.exports = Chart;
   function fillDynamic(A, r) {
     const meta = { fresh: freshText() };
     const R = C.report(S.open, A.results, S.tf, A.frames[S.tf], A.levels, meta); lastR = R;
-    const F = R.facts, p = lastPrice(S.open), c = chgPct(S.open);
+    const F = R.facts, p = livePx(S.open), c = chgPct(S.open);
     const li = (a) => (a.length ? a.map((x) => `<li>${esc(x)}</li>`).join("") : "<li>—</li>");
     $("#ahead").className = "plain"; $("#ahead").innerHTML = simpleCard(A, R, p, c) + flowCard(S.open);
     $("#adyn").innerHTML = `<h3>الحقائق (من البيانات)</h3>
