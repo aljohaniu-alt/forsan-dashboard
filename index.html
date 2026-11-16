@@ -1383,6 +1383,17 @@ if (typeof module !== "undefined") module.exports = Chart;
     fetch("https://ntfy.sh/", { method: "POST", body: JSON.stringify({ topic: S.ntfy, title: `${a.sym}: ${a.indicator}`, message: body, priority: 4 }) }).catch(() => {});
   }
   /** يقارن الحالة الحالية بالسابقة ولا يرسل إلا عند التحول (لا تكرار لنفس الحالة). */
+  /** قوة شراء: آخر 15 دقيقة دخولها ≥ 60% من حجمها، والتراكمي اليوم موجب، والسعر فوق VWAP. وصف لحالة السيولة وليس توصية. */
+  function buyPressure(A, aboveVwap) {
+    const t = A.bars1m.filter((b) => C.isReg(b)); if (!t.length) return null;
+    const day = t[t.length - 1].d, td = t.filter((b) => b.d === day), w = td.slice(-15);
+    if (td.length < 20 || w.length < 15) return null;
+    const fs = C.flowSeries(td, false), wf = C.flowSeries(w, false);
+    const vol = w.reduce((s, b) => s + b.v, 0), net = wf.cum[wf.cum.length - 1];
+    if (!vol) return null;
+    const pct = (net / vol + 1) / 2 * 100, cum = fs.cum[fs.cum.length - 1];
+    return { on: pct >= 60 && cum > 0 && aboveVwap === true, pct, net, cum };
+  }
   function detectAlerts(sym, A) {
     const r5 = A.results["5Min"], r1 = A.results["1Min"];
     if (!r5) return;
@@ -1393,9 +1404,11 @@ if (typeof module !== "undefined") module.exports = Chart;
       macdPos: F.hist !== null ? F.hist > 0 : null, rsiZone: F.rsi === null ? null : F.rsi < S.cfgAlerts.rsiLow ? "low" : F.rsi > S.cfgAlerts.rsiHigh ? "high" : "mid",
       div: F.div, rvolHi: F.rvol !== null && F.rvol >= S.cfgAlerts.rvolSpike,
     };
+    const bp = buyPressure(A, cur.aboveVwap); cur.buyP = bp ? bp.on : null;
     const first = !S.prev[sym];
     const flip = (k) => !first && P[k] !== null && P[k] !== undefined && cur[k] !== null && cur[k] !== P[k];
     if (flip("aboveVwap")) pushAlert(sym, "vwap", "5Min", "VWAP", cur.aboveVwap ? "السعر استعاد VWAP وأغلق فوقه" : "السعر فقد VWAP وأغلق تحته (ضغط بيعي محتمل)", tfT, p);
+    if (flip("buyP") && cur.buyP) pushAlert(sym, "flow", "1Min", "قوة شراء", `ظهرت قوة شراء: دخول ${bp.pct.toFixed(0)}% من حجم آخر 15 دقيقة، والسيولة التراكمية اليوم موجبة، والسعر فوق VWAP`, tfT, p);
     if (flip("e9over20")) pushAlert(sym, "ema", "5Min", "EMA9/EMA20", cur.e9over20 ? "EMA9 تقاطع صعودًا فوق EMA20" : "EMA9 تقاطع هبوطًا تحت EMA20", tfT, p);
     if (flip("macdPos")) pushAlert(sym, "macd", "5Min", "MACD", cur.macdPos ? "تقاطع MACD إيجابي: تحسن الزخم" : "تقاطع MACD سلبي: ضعف الزخم", tfT, p);
     if (!first && cur.rsiZone !== P.rsiZone && cur.rsiZone !== "mid" && cur.rsiZone) pushAlert(sym, "rsi", "5Min", "RSI", cur.rsiZone === "low" ? `RSI دخل تشبع البيع (${F.rsi.toFixed(0)})` : `RSI دخل تشبع الشراء (${F.rsi.toFixed(0)})`, tfT, p);
@@ -1865,7 +1878,7 @@ if (typeof module !== "undefined") module.exports = Chart;
     setInterval(wsSync, 5000);
     start();
   }
-  window.FT = { get CH() { return CH; }, offHours, S, API, init, detectAlerts, staleness, passFilters, mergeBars, pushAlert, formingBar, onTrade };
+  window.FT = { get CH() { return CH; }, offHours, S, API, init, detectAlerts, staleness, passFilters, mergeBars, pushAlert, buyPressure, formingBar, onTrade };
   window.FT.surge3 = surge3;
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init); else init();
 })();
