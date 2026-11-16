@@ -1302,10 +1302,11 @@ if (typeof module !== "undefined") module.exports = Chart;
       for (const m of msgs) {
         if (m.T === "success" && m.msg === "connected") sock.send(JSON.stringify({ action: "auth", key: S.key, secret: S.secret }));
         else if (m.T === "success" && m.msg === "authenticated") { S.ws.state = "live"; wsDelay = 1000; subs = new Set(); wsSync(); fillGaps(); }
-        else if (m.T === "error") { S.ws.err = m.code || m.msg; S.ws.state = "error:" + (m.msg || m.code); if (WS_REASONS[m.code]) S.ws.blocked = "key"; }
-        else if (m.T === "t") onTrade(m);
-        else if (m.T === "q") onQuote(m);
-        else if (m.T === "b" || m.T === "u") onBar(m);
+        else if (m.T === "error") { S.ws.err = m.code || m.msg; S.ws.errMsg = `${m.code || ""} ${m.msg || ""}`.trim(); S.ws.state = "error:" + (m.msg || m.code); if (WS_REASONS[m.code]) S.ws.blocked = "key"; }
+        else if (m.T === "subscription") S.ws.sub = { t: (m.trades || []).length, q: (m.quotes || []).length, b: (m.bars || []).length, list: (m.trades || []).slice(0, 6).join(",") };
+        else if (m.T === "t") { S.ws.nt = (S.ws.nt || 0) + 1; onTrade(m); }
+        else if (m.T === "q") { S.ws.nq = (S.ws.nq || 0) + 1; onQuote(m); }
+        else if (m.T === "b" || m.T === "u") { S.ws.nb = (S.ws.nb || 0) + 1; onBar(m); }
       }
       renderStatus();
     };
@@ -1348,7 +1349,8 @@ if (typeof module !== "undefined") module.exports = Chart;
     return `<div class="lstrip"><span>آخر صفقة <b><bdi dir="ltr">${tr ? num(tr.p) : "—"}</bdi></b>${tr ? ` <small>قبل ${age(tr.t)}</small>` : ""}</span>`
       + `<span class="up">شراء <b><bdi dir="ltr">${qOk && q.b ? num(q.b) : "—"}</bdi></b>${qOk && q.bs ? ` <small>×${q.bs}</small>` : ""}</span>`
       + `<span class="dn">بيع <b><bdi dir="ltr">${qOk && q.a ? num(q.a) : "—"}</bdi></b>${qOk && q.as ? ` <small>×${q.as}</small>` : ""}</span>`
-      + `<span>الفارق <b><bdi dir="ltr">${qOk && q.a && q.b ? num(q.a - q.b) : "—"}</bdi></b></span></div>`;
+      + `<span>الفارق <b><bdi dir="ltr">${qOk && q.a && q.b ? num(q.a - q.b) : "—"}</bdi></b></span></div>`
+      + `<div class="note">تشخيص البث: حالة <bdi dir="ltr">${esc(S.ws.state)}</bdi> · وصل صفقات <bdi dir="ltr">${S.ws.nt || 0}</bdi> · عروض <bdi dir="ltr">${S.ws.nq || 0}</bdi> · شموع <bdi dir="ltr">${S.ws.nb || 0}</bdi> · اشتراك: ${S.ws.sub ? `<bdi dir="ltr">${S.ws.sub.t}/${S.ws.sub.q}/${S.ws.sub.b}</bdi> (${esc(S.ws.sub.list)})` : "لم يصل تأكيد"}${S.ws.errMsg ? ` · خطأ: <bdi dir="ltr">${esc(S.ws.errMsg)}</bdi>` : ""} · آخر رسالة قبل <bdi dir="ltr">${S.ws.lastMsg ? Math.round((now() - S.ws.lastMsg) / 1000) : "—"}</bdi>ث · الرمز المفتوح <bdi dir="ltr">${esc(sym)}</bdi></div>`;
   }
   function onBar(m) {
     const b = C.toBar({ t: m.t, o: m.o, h: m.h, l: m.l, c: m.c, v: m.v });
