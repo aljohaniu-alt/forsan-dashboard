@@ -135,7 +135,7 @@ details.dg{border:0;margin:2px 0 0;padding:0}details.dg>summary{color:var(--mut)
 </style>
 </head>
 <body>
-<header><div class="top"><div class="brand"><div class="logo"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 17l5-6 4 3 7-9" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><circle cx="20" cy="5" r="2" fill="#fff"/></svg></div><div><h1>لوحة السوق</h1><small>قراءة فنية فقط · القرار قرارك · نسخة <bdi dir="ltr" id="ver">11-16 23:31 · 54bbbec</bdi></small></div></div><button id="gear" aria-label="الإعدادات">⚙</button></div><div id="status"></div></header>
+<header><div class="top"><div class="brand"><div class="logo"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 17l5-6 4 3 7-9" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><circle cx="20" cy="5" r="2" fill="#fff"/></svg></div><div><h1>لوحة السوق</h1><small>قراءة فنية فقط · القرار قرارك · نسخة <bdi dir="ltr" id="ver">11-16 23:42 · c5771c7</bdi></small></div></div><button id="gear" aria-label="الإعدادات">⚙</button></div><div id="status"></div></header>
 <nav id="tabs"></nav>
 <main id="body"></main>
 <div id="settings" hidden></div>
@@ -1548,6 +1548,36 @@ if (typeof module !== "undefined") module.exports = Chart;
     const pct = (net / vol + 1) / 2 * 100, cum = fs.cum[fs.cum.length - 1];
     return { on: pct >= BP_PCT && cum > 0 && aboveVwap === true, pct, net, cum };
   }
+  /** قوة بيع / انقلاب السيولة: آخر 3 شموع دقيقة خروجها ≥ 65% من حجمها. إذا كانت سيولة اليوم موجبة فهو انقلاب. */
+  function sellPressure(A) {
+    const t = A.bars1m.filter((b) => C.isReg(b)); if (!t.length) return null;
+    const day = t[t.length - 1].d, td = t.filter((b) => b.d === day), w = td.slice(-BP_N);
+    if (td.length < 20 || w.length < BP_N) return null;
+    const vol = w.reduce((s, b) => s + b.v, 0); if (!vol) return null;
+    const net = C.flowSeries(w, false).cum[BP_N - 1], cum = C.flowSeries(td, false).cum[td.length - 1], sell = (1 - net / vol) / 2 * 100;
+    return { on: sell >= BP_PCT, sell, cum, reversal: cum > 0 };
+  }
+  /** تجمّع قبل الاختراق: تضيّق ملحوظ في مدى شموع 5 دقائق + السعر قريب تحت مقاومة + الحجم لا ينخفض. */
+  function squeezeState(frame, levels, price, atr) {
+    const n = frame.length; if (n < 30 || !(price > 0)) return null;
+    const rg = (b) => b.h - b.l, avg = (x) => x.reduce((s, v) => s + v, 0) / x.length;
+    const recent = avg(frame.slice(n - 6).map(rg)), prior = avg(frame.slice(n - 26, n - 6).map(rg));
+    if (!(prior > 0)) return null;
+    const ratio = recent / prior, hi20 = Math.max(...frame.slice(n - 20).map((b) => b.h));
+    const cands = [hi20, levels.HOD, levels.PDH, levels.OR_high, levels.PM_high].filter((v) => v && v >= price);
+    if (!cands.length) return { on: false, ratio };
+    const res = Math.min(...cands), dist = res - price, near = dist <= Math.max(0.4 * (atr || 0), price * 0.003);
+    const volUp = avg(frame.slice(n - 3).map((b) => b.v)) >= avg(frame.slice(n - 9, n - 3).map((b) => b.v));
+    return { on: ratio <= 0.6 && near && volUp, ratio, res, dist, volUp };
+  }
+  /** اختراق مقاومة قوية مدعوم: اختراق + المقاومة اختُبرت مرتين فأكثر + حجم نسبي + الدرجة والاتجاه والسيولة تدل على الصعود. */
+  function strongBreak(frame, F, score, aboveVwap, dayBuyPct) {
+    const n = frame.length; if (n < 25) return null;
+    const res = Math.max(...frame.slice(n - 22, n - 2).map((b) => b.h));
+    const tests = frame.slice(n - 22, n - 2).filter((b) => b.h >= res * 0.9985 && b.h <= res).length;
+    const checks = { tested: tests >= 2, rvol: F.rvol !== null && F.rvol >= 1.5, score: score >= 65, ema: F.ema9 !== null && F.ema20 !== null && F.ema9 > F.ema20, vwap: aboveVwap === true, flow: dayBuyPct !== null && dayBuyPct >= 52 };
+    return { on: Object.values(checks).every(Boolean), checks, res, tests };
+  }
   function detectAlerts(sym, A) {
     const r5 = A.results["5Min"], r1 = A.results["1Min"];
     if (!r5) return;
@@ -1559,15 +1589,23 @@ if (typeof module !== "undefined") module.exports = Chart;
       div: F.div, rvolHi: F.rvol !== null && F.rvol >= S.cfgAlerts.rvolSpike,
     };
     const bp = buyPressure(A, cur.aboveVwap); cur.buyP = bp ? bp.on : null;
+    const sp = sellPressure(A); cur.sellP = sp ? sp.on : null;
+    const sq = squeezeState(A.frames["5Min"] || [], A.levels || {}, p, F.atr); cur.squeeze = sq ? sq.on : null;
     const first = !S.prev[sym];
     const flip = (k) => !first && P[k] !== null && P[k] !== undefined && cur[k] !== null && cur[k] !== P[k];
     if (flip("aboveVwap")) pushAlert(sym, "vwap", "5Min", "VWAP", cur.aboveVwap ? "السعر استعاد VWAP وأغلق فوقه" : "السعر فقد VWAP وأغلق تحته (ضغط بيعي محتمل)", tfT, p);
     if (flip("buyP") && cur.buyP) pushAlert(sym, "flow", "1Min", "قوة شراء", `ظهرت قوة شراء على الدقيقة: دخول ${bp.pct.toFixed(0)}% من حجم آخر ${BP_N} دقائق، والسيولة التراكمية اليوم موجبة، والسعر فوق VWAP`, r1 ? r1.last.t : tfT, p);
+    if (flip("sellP") && cur.sellP) pushAlert(sym, "flow", "1Min", sp.reversal ? "انقلاب السيولة" : "قوة بيع", sp.reversal ? `انقلاب السيولة: كان الدخول متفوقًا اليوم لكن آخر ${BP_N} دقائق خروج ${sp.sell.toFixed(0)}% من حجمها` : `ظهرت قوة بيع على الدقيقة: خروج ${sp.sell.toFixed(0)}% من حجم آخر ${BP_N} دقائق`, r1 ? r1.last.t : tfT, p);
+    if (flip("squeeze") && cur.squeeze) pushAlert(sym, "squeeze", "5Min", "تجمّع قبل الاختراق", `تضيّق في مدى الشموع (${(sq.ratio * 100).toFixed(0)}% من المعتاد) والسعر قريب تحت مقاومة ${num(sq.res)} والحجم لا ينخفض. لم يحدث اختراق بعد`, tfT, p);
     if (flip("e9over20")) pushAlert(sym, "ema", "5Min", "EMA9/EMA20", cur.e9over20 ? "EMA9 تقاطع صعودًا فوق EMA20" : "EMA9 تقاطع هبوطًا تحت EMA20", tfT, p);
     if (flip("macdPos")) pushAlert(sym, "macd", "5Min", "MACD", cur.macdPos ? "تقاطع MACD إيجابي: تحسن الزخم" : "تقاطع MACD سلبي: ضعف الزخم", tfT, p);
     if (!first && cur.rsiZone !== P.rsiZone && cur.rsiZone !== "mid" && cur.rsiZone) pushAlert(sym, "rsi", "5Min", "RSI", cur.rsiZone === "low" ? `RSI دخل تشبع البيع (${F.rsi.toFixed(0)})` : `RSI دخل تشبع الشراء (${F.rsi.toFixed(0)})`, tfT, p);
     if (!first && cur.div && cur.div !== P.div) pushAlert(sym, "div", "5Min", "Divergence", cur.div === "bull" ? "انفراج إيجابي: السعر قاع أدنى وRSI قاع أعلى" : "انفراج سلبي: السعر قمة أعلى وRSI قمة أدنى", tfT, p);
     if (!first && cur.rvolHi && !P.rvolHi) pushAlert(sym, "rvol", "5Min", "RVOL", `الحجم النسبي ${F.rvol.toFixed(1)}× المعتاد`, tfT, p);
+    if (r5.events.some((e) => e[0] === "breakout")) {
+      const f2 = A.frames["5Min"] || [], fl = C.flow(A.bars1m), sb = strongBreak(f2, F, r5.score, cur.aboveVwap, fl ? fl.buyPct : null);
+      if (sb && sb.on) pushAlert(sym, "strongbreak", "5Min", "اختراق مقاومة قوية", `اختراق ${num(sb.res)} (اختُبرت ${sb.tests} مرات) بحجم ${F.rvol.toFixed(1)}× وتحليل داعم: الدرجة ${Math.round(r5.score)}، EMA9 فوق EMA20، فوق VWAP، والسيولة داخلة`, tfT, p);
+    }
     for (const [k, s, t] of r5.events) {
       if (["breakout", "breakdown", "false_up", "false_down"].includes(k)) pushAlert(sym, k, "5Min", k.startsWith("false") ? "اختراق كاذب" : k === "breakout" ? "اختراق مقاومة" : "كسر دعم", t + (k === "breakout" || k === "breakdown" ? "" : " — الإشارة الأولى قد تكون خادعة"), tfT, p);
     }
@@ -2116,7 +2154,7 @@ if (typeof module !== "undefined") module.exports = Chart;
     setInterval(() => { const lq = $("#lq"); if (lq && S.open && S.tab === "analysis") lq.innerHTML = liveStrip(S.open); }, 1000);
     start();
   }
-  window.FT = { get CH() { return CH; }, offHours, S, API, init, detectAlerts, staleness, passFilters, mergeBars, pushAlert, buyPressure, checkUpdate, onFhTrade, liveTick, liveBtn, candleFeed, onQuote, liveStrip, formingBar, onTrade };
+  window.FT = { get CH() { return CH; }, offHours, S, API, init, detectAlerts, staleness, passFilters, mergeBars, pushAlert, buyPressure, sellPressure, squeezeState, strongBreak, checkUpdate, onFhTrade, liveTick, liveBtn, candleFeed, onQuote, liveStrip, formingBar, onTrade };
   window.FT.surge3 = surge3;
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init); else init();
 })();
